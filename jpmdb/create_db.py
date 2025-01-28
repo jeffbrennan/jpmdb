@@ -6,12 +6,16 @@ def create_db():
     db_path = Path(__file__).parents[1] / "data" / "jpmdb.duckdb"
     conn = duckdb.connect(str(db_path))
 
-    cmds = [
-        "create view imdb_title_basics as select * from delta_scan('data/silver/imdb/title_basics')",
-        "create view imdb_title_ratings as select * from delta_scan('data/silver/imdb/title_ratings')",
+    base_dir = Path(__file__).parents[1] / "data" / "silver"
+    tables = [
+        "imdb/title_basics",
+        "imdb/title_ratings",
+        "jpmdb",
     ]
 
-    for cmd in cmds:
+    for tbl in tables:
+        tbl_name = tbl.split("/")[-1]
+        cmd = f"create view if not exists {tbl_name} as select * from delta_scan('{base_dir.as_posix()}/{tbl}')"
         conn.sql(cmd)
 
 
