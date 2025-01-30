@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
@@ -12,7 +13,9 @@ from jpmdb.scrape_imdb import get_imdb_unique_ids_from_title
 app = typer.Typer()
 
 
-class MatchConfig(BaseModel):
+@dataclass
+class MatchConfig:
+    review_record: RecordToReview
     record: StagingRecord
     imdb_data: pl.DataFrame
     scrape: bool
@@ -38,25 +41,34 @@ class StagingRecord(BaseModel):
 
 
 class RecordToReview(BaseModel):
+    watched_year: int
+    watched_order: int
     title_original: str
     title: str
     title_year: int | None
     category: str
     season: int | None
+    sequel: int | None
+    rating: float
+    title_normalized: str
+    watched_id: str
     tconst: str | None
+    last_updated: datetime.datetime
+    manually_reviewed_at: datetime.datetime | None
+    manually_approved: bool | None
     primaryTitle: str | None
     originalTitle: str | None
+    titleType: str | None
+    startYear: int | None
     numVotes: int | None
+
 
 class IMDBRecordData(BaseModel):
     tconst: str
     primaryTitle: str
     originalTitle: str
-    startYear: int
-    endYear: int | None
-    runtimeMinutes: int | None
-    genres: str
-    averageRating: float | None
+    titleType: str | None
+    startYear: int | None
     numVotes: int | None
 
 
@@ -66,7 +78,7 @@ def print_matched_record(record: RecordToReview) -> None:
     else:
         title_suffix = f" ({record.title_year})"
 
-    print("=" * 40)
+    print("=" * 20, {record.watched_id}, "=" * 20)
     print(f"Title: {record.title} {title_suffix}")
     print(f"Original title: {record.title_original}")
     print(f"Category: {record.category}")
@@ -78,8 +90,12 @@ def print_matched_record(record: RecordToReview) -> None:
     print(f"tconst: {record.tconst}")
     print(f"Primary title: {record.primaryTitle}")
     print(f"Original title: {record.originalTitle}")
-    print(f"Number of votes: {record.numVotes}")
+    print(f"Title type: {record.titleType}")
+    if record.startYear is not None:
+        print(f"Start year: {record.startYear}")
+    print(f"Number of votes: {record.numVotes:,}")
     print("=" * 40)
+    print("")
 
 
 def review_matched_record(record: RecordToReview) -> bool:
@@ -95,6 +111,7 @@ def scrape_record(config: MatchConfig, unique_id: str | None) -> None:
         if record.title_year is not None:
             search_query += f" {record.title_year}"
         try:
+            print("scraping record:", record.title)
             unique_ids = get_imdb_unique_ids_from_title(record.title).unique_ids
         except Exception as e:
             print(f"error scraping record: {record.title}")
@@ -104,26 +121,38 @@ def scrape_record(config: MatchConfig, unique_id: str | None) -> None:
     else:
         unique_ids = [unique_id]
 
-    imdb_data_filtered = config.imdb_data.filter(
-        pl.col("tconst").is_in(unique_ids)
-    ).to_dicts()
+    imdb_data_filtered = (
+        config.imdb_data.filter(pl.col("tconst").is_in(unique_ids))
+        .with_columns(
+            pl.when(pl.col("numVotes").is_null())
+            .then(0)
+            .otherwise(pl.col("numVotes"))
+            .alias("numVotes")
+        )
+        .to_dicts()
+    )
 
     imdb_data_filtered = [IMDBRecordData(**record) for record in imdb_data_filtered]
 
+    imdb_data_filtered = sorted(  # pyright: ignore [reportCallIssue]
+        imdb_data_filtered,
+        key=lambda x: x.numVotes,  # pyright: ignore [reportArgumentType]
+        reverse=True,
+    )
+
     for imdb_record in imdb_data_filtered:
-        model = RecordToReview(
-            title_original=record.title_original,
-            title=record.title,
-            title_year=record.title_year,
-            category=record.category,
-            season=record.season,
-            tconst=imdb_record.tconst,
+        review_record = RecordToReview(
+            **config.record.model_dump(),
             primaryTitle=imdb_record.primaryTitle,
             originalTitle=imdb_record.originalTitle,
             numVotes=imdb_record.numVotes,
+            titleType=imdb_record.titleType,
+            startYear=imdb_record.startYear,
         )
-        approved = review_matched_record(model)
+
+        approved = review_matched_record(review_record)
         if approved:
+            record.tconst = imdb_record.tconst
             log_reviewed_record(record, True)
             return
 
@@ -140,6 +169,9 @@ def log_reviewed_record(record: StagingRecord, approved: bool) -> None:
         record.tconst = None
 
     df = pl.DataFrame(record.model_dump())
+    df_schema = pl.read_delta(str(out_path)).schema
+    df = df.cast(df_schema)  # pyright: ignore [reportArgumentType]
+
     df.write_delta(
         out_path,
         mode="merge",
@@ -165,7 +197,7 @@ def handle_unmatched_record(config: MatchConfig) -> None:
 
 
 def handle_matched_record(config: MatchConfig) -> None:
-    approved = review_matched_record(RecordToReview(**config.record.model_dump()))
+    approved = review_matched_record(config.review_record)
     if approved:
         log_reviewed_record(config.record, True)
         return
@@ -178,26 +210,40 @@ def main(scrape: bool = True, prompt_tconst: bool = False) -> None:
     base_path = base_dir / "jpmdb" / "stg_jpmdb_combined"
     staging_df = pl.read_delta(str(base_path))
 
-    imdb_data = pl.read_delta(str(base_dir / "imdb" / "title_basics")).join(
-        pl.read_delta(str(base_dir / "imdb" / "title_ratings")), on="tconst"
+    imdb_data = (
+        pl.read_delta(str(base_dir / "imdb" / "title_basics"))
+        .join(pl.read_delta(str(base_dir / "imdb" / "title_ratings")), on="tconst")
+        .select(
+            "tconst",
+            "primaryTitle",
+            "originalTitle",
+            "numVotes",
+            "titleType",
+            "startYear",
+        )
     )
 
     records_to_review = (
         staging_df.filter(
-            (pl.col("manually_approved").is_null()) | (~pl.col("manually_approved"))
+            (pl.col("manually_approved").is_null())
+            | (~pl.col("manually_approved"))
+            | (pl.col("tconst").is_null())
         )
+        .filter(pl.col("manually_reviewed_at").is_null())
         .join(imdb_data, on="tconst", how="left")
         .to_dicts()
     )
-    records_to_review = [StagingRecord(**record) for record in records_to_review]
+
+    records_to_review = [RecordToReview(**record) for record in records_to_review]
     print("Number of records to review:", len(records_to_review))
 
     for record in records_to_review:
         config = MatchConfig(
-            record=record,
+            record=StagingRecord(**record.model_dump()),
             imdb_data=imdb_data,
             scrape=scrape,
             prompt_tconst=prompt_tconst,
+            review_record=record,
         )
 
         if record.tconst is None:
