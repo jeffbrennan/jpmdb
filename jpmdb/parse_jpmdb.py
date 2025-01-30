@@ -133,7 +133,7 @@ def parse_line(line: str) -> ParsedLine:
         .removesuffix(".")
     )
     if "Series:" in line:
-        title = title + " Series"
+        title += " Series"
 
     remaining_series_identifiers = ["episode", "Episode"]
     for identifier in remaining_series_identifiers:
@@ -286,13 +286,17 @@ def write_jpmdb(df: pl.DataFrame) -> None:
     out_file_dir = Path(__file__).parents[1] / "data" / "silver"
     out_file_dir.mkdir(parents=True, exist_ok=True)
     df.write_delta(
-        out_file_dir / "jpmdb",
+        out_file_dir / "jpmdb" / "jpmdb_cleaned",
         mode="overwrite",
         delta_write_options={"schema_mode": "overwrite"},
     )
 
 
-if __name__ == "__main__":
+def main():
     records = parse_jpmdb()
     df = validate_jpmdb(records)
     write_jpmdb(df)
+
+
+if __name__ == "__main__":
+    main()
