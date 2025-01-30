@@ -434,7 +434,8 @@ def main() -> None:
     )
     assert missing_ids == 0
 
-    final_df.write_delta("data/silver/jpmdb_combined_staging", mode="overwrite")
+    out_dir = Path(__file__).parents[1] / "data" / "silver" / "jpmdb"
+    final_df.write_delta(out_dir / "stg_jpmdb_combined", mode="overwrite")
 
 
 if __name__ == "__main__":
