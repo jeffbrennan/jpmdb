@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
 
 import polars as pl
 import typer
@@ -205,7 +206,37 @@ def handle_matched_record(config: MatchConfig) -> None:
     handle_unmatched_record(config)
 
 
-def main(scrape: bool = True, prompt_tconst: bool = False) -> None:
+@app.command()
+def delete(unique_id: Annotated[str, typer.Option(prompt=True)]) -> None:
+    base_dir = Path(__file__).parents[1] / "data" / "silver"
+    base_path = base_dir / "jpmdb" / "stg_jpmdb_combined"
+    staging_df = pl.read_delta(str(base_path))
+
+    unique_ids = unique_id.split(",")
+
+    records_to_delete = staging_df.filter(
+        pl.col("watched_id").is_in(unique_ids)
+    ).to_dicts()
+
+    if len(records_to_delete) == 0:
+        print("No records found to delete")
+        return
+
+    for record in records_to_delete:
+        record = StagingRecord(**record)
+        print(record)
+        confirm_deletion = typer.confirm("Remove approval?")
+        if not confirm_deletion:
+            continue
+
+        record.tconst = None
+        log_reviewed_record(record, False)
+
+
+@app.command()
+def review(
+    scrape: bool = True, prompt_tconst: bool = False, review_again: bool = False
+) -> None:
     base_dir = Path(__file__).parents[1] / "data" / "silver"
     base_path = base_dir / "jpmdb" / "stg_jpmdb_combined"
     staging_df = pl.read_delta(str(base_path))
@@ -223,16 +254,16 @@ def main(scrape: bool = True, prompt_tconst: bool = False) -> None:
         )
     )
 
-    records_to_review = (
-        staging_df.filter(
-            (pl.col("manually_approved").is_null())
-            | (~pl.col("manually_approved"))
-            | (pl.col("tconst").is_null())
-        )
-        .filter(pl.col("manually_reviewed_at").is_null())
-        .join(imdb_data, on="tconst", how="left")
-        .to_dicts()
+    staging_df = staging_df.filter(
+        (pl.col("manually_approved").is_null())
+        | (~pl.col("manually_approved"))
+        | (pl.col("tconst").is_null())
     )
+
+    if not review_again:
+        staging_df = staging_df.filter(pl.col("manually_reviewed_at").is_null())
+
+    records_to_review = staging_df.join(imdb_data, on="tconst", how="left").to_dicts()
 
     records_to_review = [RecordToReview(**record) for record in records_to_review]
     print("Number of records to review:", len(records_to_review))
@@ -253,4 +284,4 @@ def main(scrape: bool = True, prompt_tconst: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    app()
