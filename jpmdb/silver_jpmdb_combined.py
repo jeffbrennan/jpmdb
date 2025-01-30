@@ -1,3 +1,4 @@
+import datetime
 from concurrent.futures.process import ProcessPoolExecutor
 from itertools import repeat
 from pathlib import Path
@@ -108,7 +109,7 @@ def fuzzy_match_remaining(record: dict, imdb_filtered: pl.DataFrame) -> list[dic
     }
 
     max_matches = 10
-    similarity_score_threshold = 85
+    similarity_score_threshold = 95
     fuzzy_matches = (
         fuzzy_matches_with_nysiis.with_columns(
             (
@@ -188,6 +189,10 @@ def handle_fuzzy_matching(
             pl.col("title_year").is_null()
             | (pl.col("title_year") == pl.col("startYear"))
         )
+        .filter(
+            ((pl.col("category") == "tv") & (pl.col("titleType") == "tvSeries"))
+            | (pl.col("category") != "tv")
+        )
         .with_columns(pl.col("weighted_score").mul(-1).alias("weighted_score_negative"))
         .with_columns(
             pl.arange(0, pl.len())
@@ -197,17 +202,74 @@ def handle_fuzzy_matching(
             )
             .alias("row_number")
         )
-        .filter(pl.col("row_number") <= 5)
+        .filter(pl.col("row_number") == 0)
     )
 
     return fuzzy_match_df
 
 
 @timeit
+def replace_dataframe_values(
+    df: pl.DataFrame, replacement_mapping: dict[str, str]
+) -> pl.DataFrame:
+    for key, value in replacement_mapping.items():
+        df = df.with_columns(
+            pl.col("title_normalized").str.replace_all(f"\\b{key}\\b", value)
+        )
+    return df
+
+
+@timeit
 def prep_base_dataframes():
     base_path = Path(__file__).parents[1] / "data" / "silver"
+
+    roman_numeral_conversion = {
+        "i": "1",
+        "ii": "2",
+        "iii": "3",
+        "iv": "4",
+        "v": "5",
+        "vi": "6",
+        "vii": "7",
+        "viii": "8",
+        "ix": "9",
+        "x": "10",
+        "xi": "11",
+        "xii": "12",
+        "xiii": "13",
+        "xiv": "14",
+        "xv": "15",
+        "xvi": "16",
+        "xvii": "17",
+        "xviii": "18",
+        "xix": "19",
+        "xx": "20",
+    }
+    number_conversion = {
+        "one": "1",
+        "two": "2",
+        "three": "3",
+        "four": "4",
+        "five": "5",
+        "six": "6",
+        "seven": "7",
+        "eight": "8",
+        "nine": "9",
+        "ten": "10",
+        "eleven": "11",
+        "twelve": "12",
+        "thirteen": "13",
+        "fourteen": "14",
+        "fifteen": "15",
+        "sixteen": "16",
+        "seventeen": "17",
+        "eighteen": "18",
+        "nineteen": "19",
+        "twenty": "20",
+    }
+
     jpmdb_silver = (
-        pl.read_delta(f"{base_path}/jpmdb")
+        pl.read_delta(f"{base_path}/jpmdb/jpmdb_cleaned")
         .with_columns(
             pl.col("title")
             .map_elements(
@@ -233,6 +295,9 @@ def prep_base_dataframes():
             ).alias("watched_id")
         )
     )
+
+    jpmdb_silver = replace_dataframe_values(jpmdb_silver, roman_numeral_conversion)
+    jpmdb_silver = replace_dataframe_values(jpmdb_silver, number_conversion)
 
     imdb_ratings = pl.read_delta(f"{base_path}/imdb/title_ratings")
     imdb_title_silver = (
@@ -260,6 +325,11 @@ def prep_base_dataframes():
             .str.replace_all(" and ", " & ")
         )
     )
+
+    imdb_title_silver = replace_dataframe_values(
+        imdb_title_silver, roman_numeral_conversion
+    )
+    imdb_title_silver = replace_dataframe_values(imdb_title_silver, number_conversion)
 
     return jpmdb_silver, imdb_title_silver
 
@@ -291,9 +361,32 @@ def get_exact_matches(jpmdb_silver, imdb_filtered) -> pl.DataFrame:
     return exact_matches
 
 
-def main():
+def dedupe_exact_matches(exact_matches: pl.DataFrame) -> pl.DataFrame:
+    exact_matches_deduped = (
+        exact_matches.filter(
+            ((pl.col("category") == "tv") & (pl.col("titleType") == "tvSeries"))
+            | (pl.col("category") != "tv")
+        )
+        .with_columns(pl.col("numVotes").mul(-1).alias("numVotesNegative"))
+        .with_columns(
+            pl.arange(0, pl.len())
+            .over(
+                partition_by="watched_id",
+                order_by=["numVotesNegative"],
+            )
+            .alias("match_order")
+        )
+        .filter(pl.col("match_order") == 0)
+        .sort("watched_id")
+    )
+    return exact_matches_deduped
+
+
+def main() -> None:
     jpmdb_silver, imdb_filtered = prep_base_dataframes()
     exact_matches = get_exact_matches(jpmdb_silver, imdb_filtered)
+
+    exact_matches_deduped = dedupe_exact_matches(exact_matches)
 
     unmatched_titles = jpmdb_silver.join(
         exact_matches.select("title_normalized").unique(),
@@ -302,24 +395,37 @@ def main():
     )
 
     fuzzy_match_df = handle_fuzzy_matching(
-        unmatched_titles,
-        imdb_filtered,
-        jpmdb_silver,
-        sequential=False,
+        unmatched_titles, imdb_filtered, jpmdb_silver
     )
 
-    # TODO: ensure tv matched to tv, movie to movie
-    # TODO: add imdb scraping for remaining unmatched titles
-    # TODO: normalize roman numerals, numbers
-    combined_df = pl.concat([fuzzy_match_df, exact_matches], how="diagonal_relaxed")
-
-    unmatched_titles2 = (
-        combined_df.select("title_normalized")
-        .unique()
-        .join(unmatched_titles, on="title_normalized", how="anti")
+    combined_df = pl.concat(
+        [fuzzy_match_df, exact_matches_deduped], how="diagonal_relaxed"
     )
 
-    # remaining_round2
+    final_df = jpmdb_silver.join(
+        combined_df.select("title_normalized", "tconst"),
+        on="title_normalized",
+        how="left",
+    ).with_columns(
+        [
+            pl.lit(datetime.datetime.now()).alias("last_updated"),
+            pl.lit(None).cast(pl.Time).alias("manually_reviewed_at"),
+            pl.lit(None).cast(pl.Boolean).alias("manually_approved"),
+        ]
+    )
+
+    # report matches
+    print(
+        final_df.with_columns(pl.col("tconst").is_null().alias("is_unmatched"))
+        .group_by("is_unmatched")
+        .len()
+        .with_columns(
+            pl.col("count").truediv(pl.col("count").sum()).alias("percentage")
+        )
+        .sort("count", descending=True)
+    )
+
+    final_df.write_delta("data/silver/jpmdb_combined_staging", mode="overwrite")
 
 
 if __name__ == "__main__":
