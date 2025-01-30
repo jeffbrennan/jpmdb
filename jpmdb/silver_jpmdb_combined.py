@@ -403,27 +403,36 @@ def main() -> None:
     )
 
     final_df = jpmdb_silver.join(
-        combined_df.select("title_normalized", "tconst"),
-        on="title_normalized",
+        combined_df.select("watched_id", "tconst"),
+        on="watched_id",
         how="left",
     ).with_columns(
         [
-            pl.lit(datetime.datetime.now()).alias("last_updated"),
-            pl.lit(None).cast(pl.Time).alias("manually_reviewed_at"),
+            pl.lit(datetime.datetime.now(datetime.timezone.utc)).alias("last_updated"),
+            pl.lit(None)
+            .cast(pl.Datetime(time_zone="UTC"))
+            .alias("manually_reviewed_at"),
             pl.lit(None).cast(pl.Boolean).alias("manually_approved"),
         ]
     )
 
-    # report matches
-    print(
+    match_summary = (
         final_df.with_columns(pl.col("tconst").is_null().alias("is_unmatched"))
         .group_by("is_unmatched")
         .len()
-        .with_columns(
-            pl.col("count").truediv(pl.col("count").sum()).alias("percentage")
-        )
-        .sort("count", descending=True)
+        .with_columns(pl.col("len").truediv(pl.col("len").sum()).alias("percentage"))
+        .sort("len", descending=True)
     )
+    print(match_summary)
+
+    assert final_df.height == jpmdb_silver.height
+
+    missing_ids = (
+        (jpmdb_silver.select("watched_id") == final_df.select("watched_id"))
+        .filter(~pl.col("watched_id"))
+        .height
+    )
+    assert missing_ids == 0
 
     final_df.write_delta("data/silver/jpmdb_combined_staging", mode="overwrite")
 
