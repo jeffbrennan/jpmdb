@@ -73,21 +73,32 @@ class IMDBRecordData(BaseModel):
     numVotes: int | None
 
 
-def print_matched_record(record: RecordToReview) -> None:
-    if record.title_year is None:
+def print_jpmdb_record(
+    watched_id: str,
+    title: str,
+    title_year: int | None,
+    category: str,
+    season: int | None,
+    **kwargs,
+) -> None:
+    if title_year is None:
         title_suffix = ""
     else:
-        title_suffix = f" ({record.title_year})"
+        title_suffix = f"({title_year})"
 
-    print("=" * 20, {record.watched_id}, "=" * 20)
-    print(f"Title: {record.title} {title_suffix}")
-    print(f"Original title: {record.title_original}")
-    print(f"Category: {record.category}")
+    print("=" * 20, {watched_id}, "=" * 20)
+    print(f"Title: {title} {title_suffix}")
+    print(f"Category: {category}")
 
-    if record.season is not None:
-        print(f"Season: {record.season}")
+    if season is not None:
+        print(f"Season: {season}")
 
-    print("-" * 40)
+    print("=" * 40)
+
+
+def print_matched_record(record: RecordToReview) -> None:
+    print_jpmdb_record(**record.model_dump())
+
     print(f"tconst: {record.tconst}")
     print(f"Primary title: {record.primaryTitle}")
     print(f"Original title: {record.originalTitle}")
@@ -191,7 +202,8 @@ def handle_unmatched_record(config: MatchConfig) -> None:
 
     tconst = None
     if config.prompt_tconst:
-        tconst = typer.prompt("enter tconst:")
+        print_jpmdb_record(**config.record.model_dump())
+        tconst = typer.prompt("enter tconst")
 
     if config.scrape or config.prompt_tconst:
         scrape_record(config, tconst)
