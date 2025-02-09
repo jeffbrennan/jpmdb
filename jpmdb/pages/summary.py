@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import dash_bootstrap_components as dbc
 import pandas as pd
 import polars as pl
-from dash import dash_table, html
+from dash import Input, Output, callback, dash_table, html
+
+from jpmdb.styling import ScreenWidth, get_dt_style
 
 
 def get_records() -> pd.DataFrame:
@@ -38,43 +41,83 @@ def get_records() -> pd.DataFrame:
         )
         .select(
             [
-                "watched_id",
+                pl.col("watched_id").alias("id"),
                 "title",
+                pl.col("titleType").alias("type"),
                 pl.col("startYear").alias("year"),
+                "season",
                 "genres",
                 "rating",
-                pl.col("averageRating").round(1).cast(pl.String).alias("imdb_rating"),
-                pl.col("numVotes").alias("imdb_votes"),
-                (
-                    (pl.col("rating") - pl.col("averageRating"))
-                    .round(1)
-                    .cast(pl.String)
-                ).alias("rating_diff"),
+                pl.col("averageRating").alias("imdb rating"),
+                (pl.col("rating") - pl.col("averageRating")).alias("rating diff"),
+                pl.col("numVotes").alias("imdb votes"),
             ]
         )
     )
     return df.to_pandas()
 
 
-def layout():
+@callback(
+    [
+        Output("summary-table", "children"),
+        Output("summary-table", "style"),
+        Output("summary-fade", "is_in"),
+    ],
+    [
+        Input("color-mode-switch", "value"),
+        Input("breakpoints", "widthBreakpoint"),
+    ],
+)
+def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     df = get_records()
-    print(df.head())
-    print(df.columns)
+    summary_style = get_dt_style(dark_mode)
+    summary_style["style_table"]["height"] = "auto"
+    summary_style["page_size"] = 2000
+
+    sm_margins = {"maxWidth": "90vw", "width": "90vw"}
+    lg_margins = {"maxWidth": "50vw", "width": "50vw", "marginLeft": "20vw"}
+
+    if breakpoint_name in [ScreenWidth.xs, ScreenWidth.sm]:
+        summary_style["style_cell"]["font_size"] = "12px"
+        summary_style["style_table"].update(sm_margins)
+
+    else:
+        summary_style["style_table"].update(lg_margins)
+
     tbl_cols = []
+    markdown_style = {"presentation": "markdown"}
+    float_style = {"type": "numeric", "format": {"specifier": ".1f"}}
+    int_style = {"type": "numeric", "format": {"specifier": ",d"}}
+
+    col_mapping = {
+        "title": markdown_style,
+        "rating": float_style,
+        "imdb rating": float_style,
+        "rating diff": float_style,
+        "imdb votes": int_style,
+    }
+
     for col in df.columns:
-        if col == "title":
-            tbl_cols.append(
-                {"id": "title", "name": "title", "presentation": "markdown"}
-            )
+        if col in col_mapping:
+            tbl_cols.append({**col_mapping[col], "id": col, "name": col})
         else:
             tbl_cols.append({"id": col, "name": col})
 
+    tbl = dash_table.DataTable(
+        df.to_dict("records"),
+        columns=tbl_cols,
+        **summary_style,
+    )
+
+    return tbl, {}, True
+
+
+def layout():
     return [
-        html.Div(
-            id="summary-table",
-            children=dash_table.DataTable(
-                data=df.to_dict("records"),
-                columns=tbl_cols,
-            ),
+        dbc.Fade(
+            id="summary-fade",
+            children=[html.Div(id="summary-table", style={"visibility": "hidden"})],
+            style={"transition": "opacity 200ms ease-in", "minHeight": "100vh"},
+            is_in=False,
         )
     ]

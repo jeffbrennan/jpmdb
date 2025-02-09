@@ -1,4 +1,6 @@
+from dataclasses import asdict, dataclass
 from enum import StrEnum, auto
+from typing import Any
 
 
 class SitePalette(StrEnum):
@@ -33,3 +35,63 @@ def get_site_colors(dark_mode: bool, contrast: bool) -> tuple[str, str]:
     selector_str = "dark" if selector else "light"
 
     return colors[selector_str]["background"], colors[selector_str]["text"]
+
+
+@dataclass
+class DTStyle:
+    sort_action: str
+    sort_mode: str
+    column_selectable: str
+    row_selectable: bool
+    row_deletable: bool
+    fixed_rows: dict[str, bool]
+    filter_options: dict[str, str]
+    page_size: int
+    style_header: dict[str, str]
+    filter_action: str
+    style_filter: dict[str, str]
+    style_cell: dict[str, Any]
+    style_cell_conditional: list[dict[str, Any]]
+    style_data_conditional: list[dict[str, Any]]
+    style_data: dict[str, str]
+    style_table: dict[str, Any]
+    css: list[dict[str, Any]]
+
+def get_dt_style(dark_mode: bool = False) -> dict:
+    background, color = get_site_colors(dark_mode, contrast=False)
+    dt_style = asdict(
+        DTStyle(
+            sort_action="native",
+            sort_mode="multi",
+            column_selectable="single",
+            row_selectable=False,
+            row_deletable=False,
+            fixed_rows={"headers": True},
+            filter_action="native",
+            filter_options={"case": "insensitive", "placeholder_text": ""},
+            page_size=100,
+            style_header={},
+            style_filter={},
+            style_cell={
+                "textAlign": "center",
+                "minWidth": 75,
+                "maxWidth": 150,
+                "whiteSpace": "normal",
+                "wordBreak": "break-word",
+            },
+            style_cell_conditional=[],
+            style_data_conditional=[],
+            style_data={
+                "color": color,
+                "backgroundColor": background,
+            },
+            css=[],
+            style_table={
+                "height": "85vh",
+                "maxHeight": "85vh",
+                "overflowY": "scroll",
+                "overflowX": "scroll",
+            },
+        )
+    )
+    return dt_style
