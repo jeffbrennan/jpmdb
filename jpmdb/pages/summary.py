@@ -14,6 +14,24 @@ from jpmdb.common import timeit
 from jpmdb.styling import ScreenWidth, get_dt_style, get_site_colors
 
 
+def get_fig_margins(fig_type: str):
+    sm_width = 90
+    lg_width = 50
+    margin_left = 20
+
+    if fig_type == "timeseries":
+        lg_width = 70
+        margin_left = 15
+
+    sm_margins = {"maxWidth": f"{sm_width}vw", "width": f"{sm_width}vw"}
+    lg_margins = {
+        "maxWidth": f"{lg_width}vw",
+        "width": f"{lg_width}vw",
+        "marginLeft": f"{margin_left}vw",
+    }
+    return sm_margins, lg_margins
+
+
 @timeit
 def get_records() -> pd.DataFrame:
     path = Path(__file__).parents[2] / "data" / "gold" / "jpmdb"
@@ -65,7 +83,7 @@ def get_records() -> pd.DataFrame:
 
 @timeit
 def style_timeseries_fig(
-    fig: Figure, watched_id_list: list[str], font_color: str
+    fig: Figure, watched_id_list: list[str], font_color: str, screen_width: str
 ) -> Figure:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(categoryorder="array", categoryarray=watched_id_list)
@@ -114,6 +132,15 @@ def style_timeseries_fig(
         ],
         legend_title_text="",
     )
+
+    if screen_width != ScreenWidth.xs:
+        fig.update_layout(
+            margin=dict(l=200, r=200, t=50, b=0),
+        )
+    else:
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=0, b=0),
+        )
 
     return fig
 
@@ -164,7 +191,7 @@ def add_timeseries_trendline(
     ],
 )
 @timeit
-def get_timeseries_viz(dark_mode: bool, _: str):
+def get_timeseries_viz(dark_mode: bool, screen_width: str):
     df = get_records()
     df["watched_year"] = df["watched_year"].astype(str)
     df["jp_title_hover"] = df["id"] + " - " + df["jp_title"]
@@ -194,8 +221,16 @@ def get_timeseries_viz(dark_mode: bool, _: str):
         template=template,
         opacity=0.7,
     )
-    fig = style_timeseries_fig(fig, watched_id_list, font_color)
+    fig = style_timeseries_fig(fig, watched_id_list, font_color, screen_width)
     fig = add_timeseries_trendline(df, fig, watched_id_list, font_color)
+
+    sm_margins, lg_margins = get_fig_margins("timeseries")
+
+    # if screen_width in [ScreenWidth.xs, ScreenWidth.sm]:
+    #     margins = sm_margins
+    # else:
+    #     margins = lg_margins
+
     return fig, {}, True
 
 
@@ -215,8 +250,7 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
 
     summary_style = get_dt_style(dark_mode)
     summary_style["style_table"]["height"] = "auto"
-    sm_margins = {"maxWidth": "90vw", "width": "90vw"}
-    lg_margins = {"maxWidth": "50vw", "width": "50vw", "marginLeft": "20vw"}
+    sm_margins, lg_margins = get_fig_margins("table")
 
     if breakpoint_name in [ScreenWidth.xs, ScreenWidth.sm]:
         summary_style["style_cell"]["font_size"] = "12px"
