@@ -5,22 +5,22 @@
     font-style: normal;
 }
 
-#ampere-page,
+#jpmdb-page,
 #navbar {
     transition: background-color 0.2s ease;
 }
 
-#ampere-page.light-mode,
+#jpmdb-page.light-mode,
 #navbar.light-mode {
     background-color: rgb(242, 240, 227) !important;
 }
 
-#ampere-page.dark-mode,
+#jpmdb-page.dark-mode,
 #navbar.dark-mode {
     background-color: rgb(33, 33, 33) !important;
 }
 
-#ampere-page {
+#jpmdb-page {
     padding-left: 5%;
     padding-right: 5%;
     padding-bottom: 3%;
@@ -44,7 +44,7 @@ body,
 .Select input,
 .Select-value-label,
 .form-check-input,
-#ampere-page,
+#jpmdb-page,
 .dash-table-container {
     font-family: "JetBrains Mono", serif !important;
     font-weight: 600 !important;
