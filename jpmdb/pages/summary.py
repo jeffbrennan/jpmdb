@@ -11,7 +11,30 @@ def get_records() -> pd.DataFrame:
         pl.read_delta(str(path))
         .with_columns(pl.col("genres").list.join(", ").alias("genres"))
         .with_columns(
-            pl.coalesce(pl.col("primaryTitle"), pl.col("title")).alias("title")
+            pl.when(pl.col("primaryTitle").is_not_null())
+            .then(
+                pl.concat_str(
+                    [
+                        pl.lit("["),
+                        pl.col("primaryTitle"),
+                        pl.lit("]"),
+                        pl.lit("("),
+                        pl.lit("https://www.imdb.com/title/"),
+                        pl.col("tconst"),
+                        pl.lit(")"),
+                    ]
+                )
+            )
+            .otherwise(
+                pl.concat_str(
+                    [
+                        pl.lit("["),
+                        pl.col("title"),
+                        pl.lit("]"),
+                    ]
+                )
+            )
+            .alias("title")
         )
         .select(
             [
@@ -37,9 +60,21 @@ def layout():
     df = get_records()
     print(df.head())
     print(df.columns)
+    tbl_cols = []
+    for col in df.columns:
+        if col == "title":
+            tbl_cols.append(
+                {"id": "title", "name": "title", "presentation": "markdown"}
+            )
+        else:
+            tbl_cols.append({"id": col, "name": col})
+
     return [
         html.Div(
             id="summary-table",
-            children=dash_table.DataTable(data=df.to_dict("records")),
+            children=dash_table.DataTable(
+                data=df.to_dict("records"),
+                columns=tbl_cols,
+            ),
         )
     ]
