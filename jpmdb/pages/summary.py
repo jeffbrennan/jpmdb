@@ -28,15 +28,7 @@ def get_records() -> pd.DataFrame:
                     ]
                 )
             )
-            .otherwise(
-                pl.concat_str(
-                    [
-                        pl.lit("["),
-                        pl.col("title"),
-                        pl.lit("]"),
-                    ]
-                )
-            )
+            .otherwise(pl.col("title"))
             .alias("title")
         )
         .select(
@@ -72,8 +64,6 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     df = get_records()
     summary_style = get_dt_style(dark_mode)
     summary_style["style_table"]["height"] = "auto"
-    summary_style["page_size"] = 2000
-
     sm_margins = {"maxWidth": "90vw", "width": "90vw"}
     lg_margins = {"maxWidth": "50vw", "width": "50vw", "marginLeft": "20vw"}
 
@@ -97,6 +87,29 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
         "imdb votes": int_style,
     }
 
+    width_mapping = {
+        "id": 75,
+        "title": 150,
+        "type": 75,
+        "year": 75,
+        "season": 75,
+        "genres": 100,
+        "rating": 75,
+        "imdb rating": 75,
+        "rating diff": 75,
+        "imdb votes": 75,
+    }
+
+    width_adjustment = [
+        {
+            "if": {"column_id": i},
+            "minWidth": width_mapping[i],
+            "maxWidth": width_mapping[i],
+        }
+        for i in width_mapping
+    ]
+
+    summary_style["style_cell_conditional"].extend(width_adjustment)
     for col in df.columns:
         if col in col_mapping:
             tbl_cols.append({**col_mapping[col], "id": col, "name": col})

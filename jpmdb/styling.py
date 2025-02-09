@@ -41,12 +41,13 @@ def get_site_colors(dark_mode: bool, contrast: bool) -> tuple[str, str]:
 class DTStyle:
     sort_action: str
     sort_mode: str
+    page_action: str
+    virtualization: bool
     column_selectable: str
     row_selectable: bool
     row_deletable: bool
     fixed_rows: dict[str, bool]
     filter_options: dict[str, str]
-    page_size: int
     style_header: dict[str, str]
     filter_action: str
     style_filter: dict[str, str]
@@ -57,6 +58,7 @@ class DTStyle:
     style_table: dict[str, Any]
     css: list[dict[str, Any]]
 
+
 def get_dt_style(dark_mode: bool = False) -> dict:
     background, color = get_site_colors(dark_mode, contrast=False)
     dt_style = asdict(
@@ -66,10 +68,11 @@ def get_dt_style(dark_mode: bool = False) -> dict:
             column_selectable="single",
             row_selectable=False,
             row_deletable=False,
+            page_action="none",
+            virtualization=True,
             fixed_rows={"headers": True},
             filter_action="native",
             filter_options={"case": "insensitive", "placeholder_text": ""},
-            page_size=100,
             style_header={},
             style_filter={},
             style_cell={
