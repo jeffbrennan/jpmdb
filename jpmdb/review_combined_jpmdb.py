@@ -247,7 +247,10 @@ def delete(unique_id: Annotated[str, typer.Option(prompt=True)]) -> None:
 
 @app.command()
 def review(
-    scrape: bool = True, prompt_tconst: bool = False, review_again: bool = False
+    scrape: bool = True,
+    prompt_tconst: bool = False,
+    review_again: bool = False,
+    watched_id: str | None = None,
 ) -> None:
     base_dir = Path(__file__).parents[1] / "data" / "silver"
     base_path = base_dir / "jpmdb" / "stg_jpmdb_combined"
@@ -265,12 +268,14 @@ def review(
             "startYear",
         )
     )
-
-    staging_df = staging_df.filter(
-        (pl.col("manually_approved").is_null())
-        | (~pl.col("manually_approved"))
-        | (pl.col("tconst").is_null())
-    )
+    if watched_id is None:
+        staging_df = staging_df.filter(
+            (pl.col("manually_approved").is_null())
+            | (~pl.col("manually_approved"))
+            | (pl.col("tconst").is_null())
+        )
+    else:
+        staging_df = staging_df.filter(pl.col("watched_id") == watched_id)
 
     if not review_again:
         staging_df = staging_df.filter(pl.col("manually_reviewed_at").is_null())
