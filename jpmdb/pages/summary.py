@@ -249,6 +249,7 @@ def get_timeseries_viz(dark_mode: bool, screen_width: str):
         Input("breakpoints", "widthBreakpoint"),
     ],
 )
+@timeit
 def get_rating_diff_viz(dark_mode: bool, screen_width: str):
     df = get_records()[
         [
@@ -302,8 +303,10 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
         size="scaled_votes",
     )
     fig.update_traces(marker=dict(opacity=0.8, line=dict(width=1, color=font_color)))
-    fig.update_xaxes(title="rating")
-    fig.update_yaxes(title="imdb rating")
+    fig.update_xaxes(title="rating", showline=False, showgrid=False, zeroline=False)
+    fig.update_yaxes(
+        title="imdb rating", showline=False, showgrid=False, zeroline=False
+    )
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -316,7 +319,7 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
                 y0=0,
                 x1=1,
                 y1=1,
-                line=dict(color="black", width=2),
+                line=dict(color=font_color, width=2),
             )
         ],
         legend_title_text="rating compared to imdb",
@@ -371,6 +374,7 @@ def get_genre_df():
         Input("breakpoints", "widthBreakpoint"),
     ],
 )
+@timeit
 def get_box_genres(dark_mode: bool, screen_width: str):
     df = get_genre_df()
     df["title_hover"] = df["id"] + " - " + df["title"]
@@ -403,8 +407,14 @@ def get_box_genres(dark_mode: bool, screen_width: str):
         hoverinfo="skip",
         selector=dict(type="box"),
     )
-    fig.update_xaxes(title="")
-    fig.update_yaxes(range=[-0.5, 11.5], title="rating")
+    fig.update_xaxes(title="", showline=False, showgrid=False, zeroline=False)
+    fig.update_yaxes(
+        range=[-0.5, 11.5],
+        title="rating",
+        showline=False,
+        showgrid=False,
+        zeroline=False,
+    )
 
     for i, genre in enumerate(df["genre"].unique()):
         n_titles = df[df["genre"] == genre]["n_titles"].iloc[0]
@@ -527,13 +537,9 @@ def layout():
         dbc.Fade(
             id="summary-fade",
             children=[
+                html.Div(id="summary-table", style={"visibility": "hidden"}),
                 dcc.Graph(
                     id="timeseries-viz",
-                    style={"visibility": "hidden"},
-                    config={"displayModeBar": False},
-                ),
-                dcc.Graph(
-                    id="box-viz",
                     style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
@@ -542,8 +548,11 @@ def layout():
                     style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
-                html.Br(),
-                html.Div(id="summary-table", style={"visibility": "hidden"}),
+                dcc.Graph(
+                    id="box-viz",
+                    style={"visibility": "hidden"},
+                    config={"displayModeBar": False},
+                ),
             ],
             style={"transition": "opacity 200ms ease-in", "minHeight": "100vh"},
             is_in=False,
