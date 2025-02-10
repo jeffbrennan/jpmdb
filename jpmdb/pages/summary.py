@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -150,6 +151,10 @@ def style_timeseries_fig(
 def add_timeseries_trendline(
     df: pd.DataFrame, fig: Figure, watched_id_list: list[str], font_color: str
 ):
+    years = sorted(set(i.split("_")[0] for i in watched_id_list))
+    for year in years[1:]:
+        boundary_id = watched_id_list.index(year + "_001")
+        fig.add_vline(x=boundary_id, line_color=font_color, layer="below")
     smoothed = lowess(df["rating"], range(len(watched_id_list)), frac=0.025)
     x_trend = [watched_id_list[i] for i, _ in enumerate(smoothed[:, 0])]
     y_trend = smoothed[:, 1]
@@ -172,12 +177,16 @@ def add_timeseries_trendline(
         )
     )
 
-    years = sorted(set(i.split("_")[0] for i in watched_id_list))
-    for year in years[1:]:
-        boundary_id = watched_id_list.index(year + "_001")
-        fig.add_vline(x=boundary_id, line_color=font_color)
-
     return fig
+
+
+def get_color_palette(groups: list, n_colors: int = 10):
+    n_groups = len(groups)
+    repeats = (n_groups // n_colors) + 1
+    colors = list(
+        pypalettes.load_cmap("Tableau_10", cmap_type="discrete", repeat=repeats).rgb  # type: ignore
+    )[0:n_groups]
+    return [f"rgb({c[0]}, {c[1]}, {c[2]})" for c in colors]
 
 
 @callback(
@@ -201,8 +210,10 @@ def get_timeseries_viz(dark_mode: bool, screen_width: str):
 
     watched_id_list = df["id"].to_list()
     colors = qualitative.Plotly
-    unique_years = sorted(df["watched_year"].unique())
-    color_map = {year: colors[i % len(colors)] for i, year in enumerate(unique_years)}
+
+    types = list(df["type"].unique())
+    colors = get_color_palette(types)
+    color_map = {t: colors[i % len(colors)] for i, t in enumerate(types)}
 
     template = "plotly_dark" if dark_mode else "plotly_white"
     fig = px.scatter(
@@ -220,7 +231,7 @@ def get_timeseries_viz(dark_mode: bool, screen_width: str):
             "id": False,
         },
         template=template,
-        opacity=0.7,
+        opacity=0.8,
     )
     fig = style_timeseries_fig(fig, watched_id_list, font_color, screen_width)
     fig = add_timeseries_trendline(df, fig, watched_id_list, font_color)
@@ -228,6 +239,101 @@ def get_timeseries_viz(dark_mode: bool, screen_width: str):
     return fig, {}, True
 
 
+@callback(
+    [
+        Output("rating-diff-viz", "figure"),
+        Output("rating-diff-viz", "style"),
+    ],
+    [
+        Input("color-mode-switch", "value"),
+        Input("breakpoints", "widthBreakpoint"),
+    ],
+)
+def get_rating_diff_viz(dark_mode: bool, screen_width: str):
+    df = get_records()[
+        [
+            "id",
+            "jp_title",
+            "title",
+            "rating",
+            "imdb rating",
+            "rating diff",
+            "imdb votes",
+        ]
+    ]
+
+    df = df.dropna(subset=["rating", "imdb rating"])
+
+    df["rated_higher"] = df["rating diff"] > 0
+    df["rated_higher"] = np.where(
+        df["rating diff"] > 0, "higher than imdb", "lower than imdb"
+    )
+    df["hover_title"] = df["id"] + " - " + df["jp_title"]
+    jitter = 0.05
+
+    df["rating_jitter"] = df["rating"] + jitter * np.random.randn(len(df))
+    df["imdb rating_jitter"] = df["imdb rating"] + jitter * np.random.randn(len(df))
+
+    min_marker = 5
+    max_marker = 80
+    min_votes = df["imdb votes"].min()
+    max_votes = df["imdb votes"].max()
+    df["scaled_votes"] = min_marker + (
+        (df["imdb votes"] - min_votes) / (max_votes - min_votes)
+    ) * (max_marker - min_marker)
+
+    _, font_color = get_site_colors(dark_mode, contrast=False)
+    fig = px.scatter(
+        df,
+        x="imdb rating_jitter",
+        y="rating_jitter",
+        color="rated_higher",
+        hover_name="hover_title",
+        hover_data={
+            "rating": ":.1f",
+            "imdb rating": ":.1f",
+            "rating diff": ":.1f",
+            "imdb votes": ":,",
+            "rating_jitter": False,
+            "imdb rating_jitter": False,
+            "scaled_votes": False,
+        },
+        template="plotly_dark" if dark_mode else "plotly_white",
+        size="scaled_votes",
+    )
+    fig.update_traces(marker=dict(opacity=0.8, line=dict(width=1, color=font_color)))
+    fig.update_xaxes(title="rating")
+    fig.update_yaxes(title="imdb rating")
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        shapes=[
+            dict(
+                type="rect",
+                xref="paper",
+                yref="paper",
+                x0=0,
+                y0=0,
+                x1=1,
+                y1=1,
+                line=dict(color="black", width=2),
+            )
+        ],
+        legend_title_text="rating compared to imdb",
+    )
+    if screen_width != ScreenWidth.xs:
+        fig.update_layout(
+            margin=dict(l=200, r=200, t=50, b=0),
+        )
+    else:
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=0, b=0),
+        )
+
+    return fig, {}
+
+
+@timeit
 def get_genre_df():
     path = Path(__file__).parents[2] / "data" / "gold" / "jpmdb"
     df = (
@@ -431,6 +537,12 @@ def layout():
                     style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
+                dcc.Graph(
+                    id="rating-diff-viz",
+                    style={"visibility": "hidden"},
+                    config={"displayModeBar": False},
+                ),
+                html.Br(),
                 html.Div(id="summary-table", style={"visibility": "hidden"}),
             ],
             style={"transition": "opacity 200ms ease-in", "minHeight": "100vh"},
