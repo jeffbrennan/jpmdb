@@ -1,4 +1,4 @@
-#[jpmdb](https://jpmdb.jeffbrennan.dev/)
+# [jpmdb](https://jpmdb.jeffbrennan.dev/)
 
 a personalized movie database for my friend Juan
 ![site](docs/site.png)
