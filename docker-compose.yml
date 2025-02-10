@@ -11,10 +11,10 @@ services:
     volumes:
       - jpmdb_data:/jpmdb/data
     labels:
-        - "traefik.http.routers.frontend.rule=Host(`jpmdb.jeffbrennan.dev`)"
+        - "traefik.http.routers.jpmdbfrontend.rule=Host(`jpmdb.jeffbrennan.dev`)"
         - "traefik.enable=true"
-        - "traefik.http.routers.frontend.entrypoints=websecure"
-        - "traefik.http.routers.frontend.tls.certresolver=myresolver"
+        - "traefik.http.routers.jpmdbfrontend.entrypoints=websecure"
+        - "traefik.http.routers.jpmdbfrontend.tls.certresolver=myresolver"
     networks:
         - jb-proxy
 volumes:
