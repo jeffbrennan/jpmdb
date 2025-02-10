@@ -1,4 +1,4 @@
-from jpmdb.parse_jpmdb import JPMDBCategory, ParsedLine, parse_line
+from jpmdb.create_silver_jpmdb import JPMDBCategory, ParsedLine, parse_line
 
 
 def test_sequel_parsing():

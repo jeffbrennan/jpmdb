@@ -1,7 +1,8 @@
-import requests
 from pathlib import Path
-import polars as pl
+
 import pandas as pd
+import polars as pl
+import requests
 
 
 def get_imdb_datasets():
