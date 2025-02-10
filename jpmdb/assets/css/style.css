@@ -515,19 +515,6 @@ td.dash-cell.cell--selected.focused {
     background-color: rgba(255, 120, 23, 0.3) !important;
 }
 
-/* paginator */
-.light-mode .first-page,
-.light-mode .previous-page,
-.light-mode .next-page,
-.light-mode .current-page,
-.light-mode .page-number,
-.light-mode .input.current-page,
-.light-mode .last-page {
-    background-color: rgb(242, 240, 227) !important;
-    color: rgb(33, 33, 33) !important;
-    font-size: 0.95em;
-    font-weight: bold !important;
-}
 
 .light-mode .current-page {
     font-size: 1em !important;
@@ -592,24 +579,15 @@ td.dash-cell.cell--selected.focused {
     background-color: rgb(147, 65, 54) !important;
 }
 
-/* paginator */
-.dark-mode .first-page,
-.dark-mode .previous-page,
-.dark-mode .next-page,
-.dark-mode .current-page,
-.dark-mode .page-number,
-.dark-mode .input.current-page,
-.dark-mode .last-page {
-    background-color: rgb(33, 33, 33) !important;
-    color: rgb(242, 240, 227) !important;
-    font-size: 0.95em;
-    font-weight: bold !important;
-}
-
 .dark-mode .current-page {
     font-size: 1em !important;
 }
 
-.dark-mode .dash-table-container .previous-next-container .page-number .current-page-container input.current-page {
-    border-bottom: 1px solid rgb(242, 240, 227) !important;
+.plotly .yaxis .domain {
+    stroke: red !important;
+}
+
+/* Apply red only to the grid lines (the minor lines at ratings 2, 4, …) */
+.plotly-graph-div .ygrid line {
+    stroke: red !important;
 }
