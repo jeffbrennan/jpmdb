@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import polars as pl
+import pypalettes
 from dash import Input, Output, callback, dash_table, dcc, html
 from plotly.colors import qualitative
 from plotly.graph_objs import Figure
@@ -224,14 +225,119 @@ def get_timeseries_viz(dark_mode: bool, screen_width: str):
     fig = style_timeseries_fig(fig, watched_id_list, font_color, screen_width)
     fig = add_timeseries_trendline(df, fig, watched_id_list, font_color)
 
-    sm_margins, lg_margins = get_fig_margins("timeseries")
-
-    # if screen_width in [ScreenWidth.xs, ScreenWidth.sm]:
-    #     margins = sm_margins
-    # else:
-    #     margins = lg_margins
-
     return fig, {}, True
+
+
+def get_genre_df():
+    path = Path(__file__).parents[2] / "data" / "gold" / "jpmdb"
+    df = (
+        pl.read_delta(str(path))
+        .select(
+            pl.col("watched_id").alias("id"),
+            pl.col("primaryTitle").alias("title"),
+            "rating",
+            "genres",
+        )
+        .explode("genres")
+        .rename({"genres": "genre"})
+        .with_columns(pl.col("title").count().over("genre").alias("n_titles"))
+        .with_columns(
+            pl.when(pl.col("n_titles") < 100)
+            .then(pl.lit("Other"))
+            .otherwise(pl.col("genre"))
+            .alias("genre")
+        )
+        .with_columns(pl.col("title").count().over("genre").alias("n_titles"))
+        .with_columns(pl.col("rating").mean().over("genre").alias("rating_avg"))
+        .sort("rating_avg", descending=True)
+    )
+
+    return df.to_pandas()
+
+
+@callback(
+    [
+        Output("box-viz", "figure"),
+        Output("box-viz", "style"),
+    ],
+    [
+        Input("color-mode-switch", "value"),
+        Input("breakpoints", "widthBreakpoint"),
+    ],
+)
+def get_box_genres(dark_mode: bool, screen_width: str):
+    df = get_genre_df()
+    df["title_hover"] = df["id"] + " - " + df["title"]
+    bg_color, font_color = get_site_colors(dark_mode, contrast=False)
+    genres = df["genre"].unique()
+    n_genres = len(genres)
+    n_colors = 10
+    repeats = (n_genres // n_colors) + 1
+
+    colors = list(
+        pypalettes.load_cmap("Tableau_10", cmap_type="discrete", repeat=repeats).rgb  # type: ignore
+    )[0:n_genres]
+
+    colors = [f"rgb({c[0]}, {c[1]}, {c[2]})" for c in colors]
+    fig = px.box(
+        df,
+        color="genre",
+        x="genre",
+        y="rating",
+        hover_name="title_hover",
+        hover_data={"rating": ":.1f"},
+        notched=True,
+        template="plotly_dark" if dark_mode else "plotly_white",
+        color_discrete_map={genre: color for genre, color in zip(genres, colors)},
+    )
+    fig.update_traces(
+        marker=dict(size=5, opacity=0.5, line=dict(width=1, color=font_color)),
+        boxpoints="all",
+        jitter=0.8,
+        hoverinfo="skip",
+        selector=dict(type="box"),
+    )
+    fig.update_xaxes(title="")
+    fig.update_yaxes(range=[-0.5, 11.5], title="rating")
+
+    for i, genre in enumerate(df["genre"].unique()):
+        n_titles = df[df["genre"] == genre]["n_titles"].iloc[0]
+        avg_rating = df[df["genre"] == genre]["rating_avg"].iloc[0]
+        fig.add_annotation(
+            x=i,
+            y=10.75,
+            text=f"n={n_titles}<br>avg={avg_rating:.1f}",
+            showarrow=False,
+            font=dict(color=font_color),
+        )
+
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        shapes=[
+            dict(
+                type="rect",
+                xref="paper",
+                yref="paper",
+                x0=0,
+                y0=0,
+                x1=1,
+                y1=1,
+                line=dict(color=font_color, width=2),
+            )
+        ],
+        legend_title_text="",
+    )
+    if screen_width != ScreenWidth.xs:
+        fig.update_layout(
+            margin=dict(l=200, r=200, t=50, b=0),
+        )
+    else:
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=0, b=0),
+        )
+
+    return fig, {}
 
 
 @callback(
@@ -317,6 +423,11 @@ def layout():
             children=[
                 dcc.Graph(
                     id="timeseries-viz",
+                    style={"visibility": "hidden"},
+                    config={"displayModeBar": False},
+                ),
+                dcc.Graph(
+                    id="box-viz",
                     style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
