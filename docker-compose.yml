@@ -1,0 +1,31 @@
+services:
+  frontend:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    build:
+      context: .
+      dockerfile: Dockerfile-frontend
+    
+    volumes:
+      - jpmdb_data:/jpmdb/data
+    labels:
+        - "traefik.http.routers.frontend.rule=Host(`jpmdb.jeffbrennan.dev`)"
+        - "traefik.enable=true"
+        - "traefik.http.routers.frontend.entrypoints=websecure"
+        - "traefik.http.routers.frontend.tls.certresolver=myresolver"
+    networks:
+        - jb-proxy
+volumes:
+  letsencrypt:
+    external: true
+  jpmdb_data:
+      driver: local
+      driver_opts:
+        type: 'none'
+        o: 'bind'
+        device: 'data'
+networks:
+  jb-proxy:
+    external: true

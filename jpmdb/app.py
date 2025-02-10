@@ -204,11 +204,11 @@ def run_app(app):
     parser.add_argument(
         "--env",
         type=str,
-        default="dev",
+        default="prod",
         help="Environment to run the app in. Default is prod",
     )
     envs = {
-        # "prod": {"host": "0.0.0.0", "debug": False},
+        "prod": {"host": "0.0.0.0", "debug": False},
         "dev": {"host": "127.0.0.1", "debug": True},
     }
 

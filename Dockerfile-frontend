@@ -1,0 +1,27 @@
+FROM python:3.11-slim AS python-base
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+ENV PYSETUP_PATH="/jpmdb" 
+
+# `builder-base` stage is used to build deps + create our virtual environment
+FROM python-base AS builder-base
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y 
+
+# copy project requirement files here to ensure they will be cached.
+WORKDIR $PYSETUP_PATH
+COPY pyproject.toml uv.lock README.md ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --extra common --extra viz --frozen --no-install-project --no-editable
+
+
+COPY jpmdb/ ./jpmdb
+COPY gunicorn_config.py .
+
+# sync the project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --extra common --extra viz --frozen
+
+EXPOSE 8051
+
+ENTRYPOINT [ "uv", "run", "gunicorn", "--config", "gunicorn_config.py", "jpmdb.app:server" ]
