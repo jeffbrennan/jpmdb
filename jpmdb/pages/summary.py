@@ -270,10 +270,14 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
         df["rating diff"] > 0, "higher than imdb", "lower than imdb"
     )
     df["hover_title"] = df["id"] + " - " + df["jp_title"]
-    jitter = 0.05
 
-    df["rating_jitter"] = df["rating"] + jitter * np.random.randn(len(df))
-    df["imdb rating_jitter"] = df["imdb rating"] + jitter * np.random.randn(len(df))
+    jitter = 0.05
+    df["rating_jitter"] = df["rating"] + np.random.uniform(
+        -jitter, jitter, size=len(df)
+    )
+    df["imdb rating_jitter"] = df["imdb rating"] + np.random.uniform(
+        -jitter, jitter, size=len(df)
+    )
 
     min_marker = 5
     max_marker = 80
@@ -303,10 +307,10 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
         size="scaled_votes",
     )
     fig.update_traces(marker=dict(opacity=0.8, line=dict(width=1, color=font_color)))
-    fig.update_xaxes(title="rating", showline=False, showgrid=False, zeroline=False)
-    fig.update_yaxes(
+    fig.update_xaxes(
         title="imdb rating", showline=False, showgrid=False, zeroline=False
     )
+    fig.update_yaxes(title="rating", showline=False, showgrid=False, zeroline=False)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
