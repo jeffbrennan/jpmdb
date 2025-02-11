@@ -18,18 +18,19 @@ from jpmdb.styling import ScreenWidth, get_dt_style, get_site_colors
 
 def get_fig_margins(fig_type: str):
     sm_width = 90
-    lg_width = 50
-    margin_left = 20
+    lg_width = 52.5
+    margin_left = 0
 
     if fig_type == "timeseries":
         lg_width = 70
-        margin_left = 15
+        margin_left = 0
 
     sm_margins = {"maxWidth": f"{sm_width}vw", "width": f"{sm_width}vw"}
     lg_margins = {
         "maxWidth": f"{lg_width}vw",
         "width": f"{lg_width}vw",
         "marginLeft": f"{margin_left}vw",
+        "marginRight": "0vw",
     }
     return sm_margins, lg_margins
 
@@ -462,6 +463,89 @@ def get_box_genres(dark_mode: bool, screen_width: str):
 
 @callback(
     [
+        Output("ratings-histogram", "figure"),
+        Output("ratings-histogram", "style"),
+    ],
+    [
+        Input("color-mode-switch", "value"),
+        Input("breakpoints", "widthBreakpoint"),
+    ],
+)
+def get_ratings_histogram(dark_mode: bool, screen_width: str):
+    df = get_records()
+    df["year"] = df["watched_year"].astype(str)
+    bg_color, font_color = get_site_colors(dark_mode, contrast=False)
+    fig = px.histogram(
+        df,
+        x="rating",
+        nbins=10,
+        facet_col="year",
+        facet_col_wrap=2,
+        template="plotly_dark" if dark_mode else "plotly_white",
+    )
+
+    fig.update_yaxes(matches=None)
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+
+    for i, annotation in enumerate(fig.layout.annotations, 0):
+        print(annotation)
+        row_num = i // 2
+        if row_num < 1:
+            y_adjust = 0
+        else:
+            y_adjust = 0.06 + (0.015 * (row_num + 1))
+        print(i, row_num, -y_adjust)
+        annotation.y = annotation.y - y_adjust
+
+    fig.update_traces(marker=dict(opacity=0.8, line=dict(width=1, color=font_color)))
+    fig.update_xaxes(
+        title=None, showline=False, showgrid=False, zeroline=False, showticklabels=False
+    )
+    fig.update_yaxes(
+        title=None, showline=False, showgrid=False, zeroline=False, showticklabels=False
+    )
+
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend_title_text="",
+    )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=50, b=0),
+    )
+
+    num_rows = len(df["year"].unique()) // 2
+    num_cols = 2
+
+    for i in range(1, num_cols):
+        fig.add_shape(
+            type="line",
+            x0=i / num_cols,
+            y0=0,
+            x1=i / num_cols,
+            y1=1,
+            yref="paper",
+            xref="paper",
+            line=dict(color=font_color, width=2),
+        )
+
+    for i in range(1, num_rows):
+        fig.add_shape(
+            type="line",
+            x0=0,
+            y0=i / num_rows,
+            x1=1,
+            y1=i / num_rows,
+            yref="paper",
+            xref="paper",
+            line=dict(color=font_color, width=2),
+        )
+
+    return fig, {"height": "100%", "maxHeight": "100%"}
+
+
+@callback(
+    [
         Output("summary-table", "children"),
         Output("summary-table", "style"),
     ],
@@ -485,6 +569,8 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     else:
         summary_style["style_table"].update(lg_margins)
 
+    print(summary_style["style_table"])
+
     tbl_cols = []
     markdown_style = {"presentation": "markdown"}
     float_style = {"type": "numeric", "format": {"specifier": ".1f"}}
@@ -499,7 +585,7 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     }
 
     width_mapping = {
-        "id": 75,
+        "id": 80,
         "title": 150,
         "type": 75,
         "year": 75,
@@ -541,7 +627,23 @@ def layout():
         dbc.Fade(
             id="summary-fade",
             children=[
-                html.Div(id="summary-table", style={"visibility": "hidden"}),
+                dbc.Row(
+                    children=[
+                        dbc.Col(
+                            id="summary-table",
+                            style={"visibility": "hidden"},
+                            width=7,
+                        ),
+                        dbc.Col(
+                            dcc.Graph(
+                                id="ratings-histogram",
+                                style={"visibility": "hidden"},
+                                config={"displayModeBar": False},
+                            ),
+                            width=5,
+                        ),
+                    ]
+                ),
                 dcc.Graph(
                     id="timeseries-viz",
                     style={"visibility": "hidden"},
