@@ -152,21 +152,23 @@ def review_matched_record(record: RecordToReview, auto_approve: bool) -> bool:
 
 def scrape_record(config: MatchConfig, unique_id: str | None, exact: bool) -> bool:
     record = config.record
-    approved = False
-    if unique_id is None:
-        search_query = record.title
-        if record.title_year is not None:
-            search_query += f" {record.title_year}"
-        try:
-            print("scraping record:", record.title)
-            unique_ids = get_imdb_unique_ids_from_title(record.title, exact=exact).unique_ids
-        except Exception as e:
-            print(f"error scraping record: {record.title}")
-            print(e)
-            return approved
+    if unique_id is not None:
+        record.tconst = unique_id
+        log_reviewed_record(record, True)
+        return True
 
-    else:
-        unique_ids = [unique_id]
+    approved = False
+    search_query = record.title
+    if record.title_year is not None:
+        search_query += f" {record.title_year}"
+    try:
+        print("scraping record:", record.title)
+        unique_ids = get_imdb_unique_ids_from_title(record.title, exact=exact).unique_ids
+    except Exception as e:
+        print(f"error scraping record: {record.title}")
+        print(e)
+        return approved
+
 
     if len(unique_ids) == 0:
         print('no matches found!')
@@ -182,9 +184,12 @@ def scrape_record(config: MatchConfig, unique_id: str | None, exact: bool) -> bo
         )
         .to_dicts()
     )
+    if len(imdb_data_filtered) == 0:
+        print("no match in db!")
+        return False
+
 
     imdb_data_filtered = [IMDBRecordData(**record) for record in imdb_data_filtered]
-
     imdb_data_filtered = sorted(  # pyright: ignore [reportCallIssue]
         imdb_data_filtered,
         key=lambda x: x.numVotes,  # pyright: ignore [reportArgumentType]
@@ -243,7 +248,13 @@ def handle_unmatched_record(config: MatchConfig) -> None:
     tconst = None
     if config.prompt_tconst:
         print_jpmdb_record(**config.record.model_dump())
-        tconst = typer.prompt("enter tconst")
+        tconst_raw = typer.prompt("enter tconst")
+        if tconst_raw.startswith("tt"):
+            tconst = tconst_raw
+        elif "https" in tconst_raw:
+            tconst = tconst_raw.removesuffix("/").split("/")[-1]
+        else:
+            raise NotImplementedError(tconst)
 
     if config.scrape or config.prompt_tconst:
         matched = scrape_record(config, tconst, exact=True)
