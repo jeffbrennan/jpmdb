@@ -250,7 +250,6 @@ def get_timeseries_viz_latest(dark_mode: bool, screen_width: str):
 
 def _timeseries_viz(dark_mode: bool, screen_width: str, filter_latest_year: bool):
     df = get_records()
-    print(df.columns)
     if filter_latest_year:
         latest_year = datetime.datetime.now().year - 1
         df = df.query(f"watched_year >= {latest_year}")
@@ -556,7 +555,7 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
     plot_height = row_height - label_space
 
     for i in range(num_years):
-        row_num = i // 2 
+        row_num = i // 2
         row_bottom = 1.0 - ((row_num + 1) * row_height)
         row_top = row_bottom + plot_height
 
@@ -640,8 +639,6 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
 
     else:
         summary_style["style_table"].update(lg_margins)
-
-    print(summary_style["style_table"])
 
     tbl_cols = []
     markdown_style = {"presentation": "markdown"}
