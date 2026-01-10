@@ -1,4 +1,5 @@
 import datetime
+from functools import lru_cache
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
@@ -38,6 +39,11 @@ def get_fig_margins(fig_type: str):
 
 @timeit
 def get_records() -> pd.DataFrame:
+    return _get_records_cached().copy()
+
+
+@lru_cache(maxsize=1)
+def _get_records_cached() -> pd.DataFrame:
     path = Path(__file__).parents[2] / "data" / "gold" / "jpmdb"
     df = (
         pl.read_delta(str(path))
@@ -391,6 +397,11 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
 
 @timeit
 def get_genre_df():
+    return _get_genre_df_cached().copy()
+
+
+@lru_cache(maxsize=1)
+def _get_genre_df_cached():
     path = Path(__file__).parents[2] / "data" / "gold" / "jpmdb"
     df = (
         pl.read_delta(str(path))
@@ -617,8 +628,7 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
     ],
 )
 def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
-    df = get_records()
-    df.drop(columns=["watched_year", "genres"], inplace=True)
+    df = get_records().drop(columns=["watched_year", "genres"])
 
     summary_style = get_dt_style(dark_mode)
     summary_style["style_table"]["height"] = "85vh"
