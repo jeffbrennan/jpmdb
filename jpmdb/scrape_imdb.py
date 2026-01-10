@@ -19,8 +19,7 @@ def get_imdb_unique_ids_from_title(title: str) -> IMDBScrapingResult:
 
     response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     soup = BeautifulSoup(response.text, "html.parser")
-
-    results = soup.find_all("a", class_="ipc-metadata-list-summary-item__t")
+    results = soup.find_all("a", class_="ipc-title-link-wrapper")
     unique_ids = []
     for result in results:
         try:
