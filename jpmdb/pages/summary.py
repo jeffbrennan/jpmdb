@@ -50,7 +50,7 @@ def get_records() -> pd.DataFrame:
             pl.when(pl.col("season").is_not_null())
             .then(
                 pl.concat_str(
-                    pl.col("primaryTitle"), pl.lit(" Season:"), pl.col("season")
+                    pl.col("primaryTitle"), pl.lit(" Season "), pl.col("season")
                 )
             )
             .otherwise(pl.col("primaryTitle"))
@@ -636,14 +636,14 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     }
 
     width_mapping = {
-        "id": 80,
-        "title": 150,
-        "type": 75,
-        "year": 75,
-        "rating": 75,
-        "imdb rating": 75,
-        "rating diff": 75,
-        "imdb votes": 75,
+        "id": 75,
+        "title": 200,
+        "type": 65,
+        "year": 65,
+        "rating": 65,
+        "imdb rating": 65,
+        "rating diff": 65,
+        "imdb votes": 65,
     }
 
     width_adjustment = [
@@ -656,6 +656,28 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     ]
 
     summary_style["style_cell_conditional"].extend(width_adjustment)
+
+    # Conditional coloring for rating diff column (matching rating diff plot colors)
+    rating_diff_styles = [
+        {
+            "if": {
+                "filter_query": "{rating diff} < 0",
+                "column_id": "rating diff",
+            },
+            "color": "#EF553B",
+        },
+        {
+            "if": {
+                "filter_query": "{rating diff} > 0",
+                "column_id": "rating diff",
+            },
+            "color": "#636EFA",
+        },
+    ]
+
+    # Color scale for rating column (salmon low, blue high)
+    summary_style["style_data_conditional"].extend(rating_diff_styles)
+
     for col in df.columns:
         if col in col_mapping:
             tbl_cols.append({**col_mapping[col], "id": col, "name": col})

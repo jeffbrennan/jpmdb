@@ -634,6 +634,30 @@ td.dash-cell.cell--selected.focused {
     font-size: 1em !important;
 }
 
+/* rating diff column - bold colored text */
+td[data-dash-column="rating diff"] .dash-cell-value {
+    font-weight: 600 !important;
+}
+
+/* table hyperlinks - match text color */
+.light-mode .dash-table-container a {
+    color: rgb(33, 33, 33) !important;
+    text-decoration: none;
+}
+
+.light-mode .dash-table-container a:hover {
+    text-decoration: underline;
+}
+
+.dark-mode .dash-table-container a {
+    color: rgb(242, 240, 227) !important;
+    text-decoration: none;
+}
+
+.dark-mode .dash-table-container a:hover {
+    text-decoration: underline;
+}
+
 .plotly .yaxis .domain {
     stroke: red !important;
 }
