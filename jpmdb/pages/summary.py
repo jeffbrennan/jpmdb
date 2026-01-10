@@ -531,21 +531,32 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
         nbins=10,
         facet_col="year",
         facet_col_wrap=2,
+        facet_row_spacing=0.02,
         template="plotly_dark" if dark_mode else "plotly_white",
     )
 
-    fig.update_yaxes(matches=None)
+    fig.update_yaxes(matches=None, rangemode="tozero")
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
 
     num_years = len(df["year"].unique())
     num_rows = (num_years + 1) // 2
     row_height = 1.0 / num_rows
-    vertical_padding = 0.005
+    label_space = 0.03
+    plot_height = row_height - label_space
+
+    for i in range(num_years):
+        row_num = i // 2 
+        row_bottom = 1.0 - ((row_num + 1) * row_height)
+        row_top = row_bottom + plot_height
+
+        yaxis_name = "yaxis" if i == 0 else f"yaxis{i + 1}"
+        if hasattr(fig.layout, yaxis_name):
+            fig.layout[yaxis_name].domain = [row_bottom, row_top]
 
     for i, annotation in enumerate(fig.layout.annotations):
         row_num = i // 2
         row_top = 1.0 - (row_num * row_height)
-        annotation.y = row_top - vertical_padding
+        annotation.y = row_top - 0.005
         annotation.yanchor = "top"
         annotation.font = dict(size=14, weight="bold")
 
