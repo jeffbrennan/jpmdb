@@ -44,17 +44,19 @@ def get_records() -> pd.DataFrame:
         .with_columns(
             [
                 pl.col("genres").list.join(", ").alias("genres"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("season").is_not_null())
-            .then(
-                pl.concat_str(
-                    pl.col("primaryTitle"), pl.lit(" Season "), pl.col("season")
+                pl.when(pl.col("season").is_not_null())
+                .then(
+                    pl.concat_str(
+                        pl.col("primaryTitle"), pl.lit(" Season "), pl.col("season")
+                    )
                 )
-            )
-            .otherwise(pl.col("primaryTitle"))
-            .alias("title_with_season")
+                .otherwise(pl.col("primaryTitle"))
+                .alias("title_with_season"),
+                pl.when(pl.col("titleType").str.starts_with("tv"))
+                .then(pl.lit("tv"))
+                .otherwise(pl.col("titleType"))
+                .alias("type"),
+            ]
         )
         .with_columns(
             pl.concat_str(
@@ -68,22 +70,20 @@ def get_records() -> pd.DataFrame:
                     pl.lit(")"),
                 ]
             ).alias("title"),
+
         )
         .select(
             [
                 pl.col("watched_id").alias("id"),
                 "watched_year",
                 "title",
-                pl.when(pl.col("titleType").str.starts_with("tv"))
-                .then(pl.lit("tv"))
-                .otherwise(pl.col("titleType"))
-                .alias("type"),
+                "type",
                 pl.col("startYear").alias("year"),
                 "genres",
-                "rating",
-                pl.col("averageRating").alias("imdb rating"),
-                (pl.col("rating") - pl.col("averageRating")).alias("rating diff"),
-                pl.col("numVotes").alias("imdb votes"),
+                pl.col("rating").alias("juan"),
+                pl.col("averageRating").alias("imdb"),
+                (pl.col("rating") - pl.col("averageRating")).alias("diff"),
+                pl.col("numVotes").alias("votes"),
             ]
         )
     )
@@ -100,7 +100,7 @@ def style_timeseries_fig(
 ) -> Figure:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(categoryorder="array", categoryarray=watched_id_list)
-    fig.update_yaxes(showline=False, showgrid=False, zeroline=False, title_standoff=5)
+    fig.update_yaxes(title="rating", showline=False, showgrid=False, zeroline=False, title_standoff=5)
 
     trace_color = font_color.replace("rgb", "rgba").replace(")", ", 0.5)")
     fig.update_traces(
@@ -128,6 +128,7 @@ def style_timeseries_fig(
         ticktext=ticktext,
         title="",
     )
+
     fig.update_layout(
         xaxis_range=[
             -5,
@@ -169,7 +170,7 @@ def add_timeseries_trendline(
     for year in years[1:]:
         boundary_id = watched_id_list.index(year + "_001")
         fig.add_vline(x=boundary_id, line_color=font_color, layer="below")
-    smoothed = lowess(df["rating"], range(len(watched_id_list)), frac=0.025)
+    smoothed = lowess(df["juan"], range(len(watched_id_list)), frac=0.025)
     x_trend = [watched_id_list[i] for i, _ in enumerate(smoothed[:, 0])]
     y_trend = smoothed[:, 1]
 
@@ -264,15 +265,15 @@ def _timeseries_viz(dark_mode: bool, screen_width: str, filter_latest_year: bool
     fig = px.scatter(
         df,
         x="id",
-        y="rating",
+        y="juan",
         color="type",
         color_discrete_map=color_map,
         hover_name="title_hover",
         hover_data={
-            "rating": ":.1f",
-            "imdb rating": ":.1f",
-            "rating diff": ":.1f",
-            "imdb votes": ":,",
+            "juan": ":.1f",
+            "imdb": ":.1f",
+            "diff": ":.1f",
+            "votes": ":,",
             "id": False,
         },
         template=template,
@@ -304,35 +305,31 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
         [
             "id",
             "title",
-            "rating",
-            "imdb rating",
-            "rating diff",
-            "imdb votes",
+            "juan",
+            "imdb",
+            "diff",
+            "votes",
         ]
     ]
 
-    df = df.dropna(subset=["rating", "imdb rating"])
+    df = df.dropna(subset=["juan", "imdb"])
 
-    df["rated_higher"] = df["rating diff"] > 0
-    df["rated_higher"] = np.where(
-        df["rating diff"] > 0, "higher than imdb", "lower than imdb"
-    )
+    df["rated_higher"] = df["diff"] > 0
+    df["rated_higher"] = np.where(df["diff"] > 0, "higher than imdb", "lower than imdb")
     df["hover_title"] = df["id"] + " - " + df["title"]
 
     jitter = 0.05
-    df["rating_jitter"] = df["rating"] + np.random.uniform(
-        -jitter, jitter, size=len(df)
-    )
-    df["imdb rating_jitter"] = df["imdb rating"] + np.random.uniform(
+    df["rating_jitter"] = df["juan"] + np.random.uniform(-jitter, jitter, size=len(df))
+    df["imdb rating_jitter"] = df["imdb"] + np.random.uniform(
         -jitter, jitter, size=len(df)
     )
 
     min_marker = 5
     max_marker = 30
-    min_votes = df["imdb votes"].min()
-    max_votes = df["imdb votes"].max()
+    min_votes = df["votes"].min()
+    max_votes = df["votes"].max()
     df["scaled_votes"] = min_marker + (
-        (df["imdb votes"] - min_votes) / (max_votes - min_votes)
+        (df["votes"] - min_votes) / (max_votes - min_votes)
     ) * (max_marker - min_marker)
 
     _, font_color = get_site_colors(dark_mode, contrast=False)
@@ -343,10 +340,10 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
         color="rated_higher",
         hover_name="hover_title",
         hover_data={
-            "rating": ":.1f",
-            "imdb rating": ":.1f",
-            "rating diff": ":.1f",
-            "imdb votes": ":,",
+            "juan": ":.1f",
+            "imdb": ":.1f",
+            "diff": ":.1f",
+            "votes": ":,",
             "rated_higher": False,
             "rating_jitter": False,
             "imdb rating_jitter": False,
@@ -359,7 +356,9 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
     fig.update_xaxes(
         title="imdb rating", showline=False, showgrid=False, zeroline=False
     )
-    fig.update_yaxes(title="rating", showline=False, showgrid=False, zeroline=False, title_standoff=5)
+    fig.update_yaxes(
+        title="rating", showline=False, showgrid=False, zeroline=False, title_standoff=5
+    )
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -528,7 +527,7 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
     bg_color, font_color = get_site_colors(dark_mode, contrast=False)
     fig = px.histogram(
         df,
-        x="rating",
+        x="juan",
         nbins=10,
         facet_col="year",
         facet_col_wrap=2,
@@ -548,6 +547,7 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
         row_top = 1.0 - (row_num * row_height)
         annotation.y = row_top - vertical_padding
         annotation.yanchor = "top"
+        annotation.font = dict(size=14, weight="bold")
 
     fig.update_traces(marker=dict(opacity=0.8, line=dict(width=1, color=font_color)))
     fig.update_xaxes(
@@ -563,7 +563,7 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
         legend_title_text="",
     )
     fig.update_layout(
-        margin=dict(l=0, r=0, t=50, b=0),
+        margin=dict(l=0, r=0, t=0, b=0),
     )
 
     num_cols = 2
@@ -592,7 +592,7 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
             line=dict(color=font_color, width=2),
         )
 
-    return fig, {"height": "100%", "maxHeight": "100%"}
+    return fig, {"height": "85vh"}
 
 
 @callback(
@@ -610,7 +610,7 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     df.drop(columns=["watched_year", "genres"], inplace=True)
 
     summary_style = get_dt_style(dark_mode)
-    summary_style["style_table"]["height"] = "auto"
+    summary_style["style_table"]["height"] = "85vh"
     sm_margins, lg_margins = get_fig_margins("table")
 
     if breakpoint_name in [ScreenWidth.xs, ScreenWidth.sm]:
@@ -629,10 +629,10 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
 
     col_mapping = {
         "title": markdown_style,
-        "rating": float_style,
-        "imdb rating": float_style,
-        "rating diff": float_style,
-        "imdb votes": int_style,
+        "juan": float_style,
+        "imdb": float_style,
+        "diff": float_style,
+        "votes": int_style,
     }
 
     width_mapping = {
@@ -642,8 +642,8 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
         "year": 65,
         "rating": 65,
         "imdb rating": 65,
-        "rating diff": 65,
-        "imdb votes": 65,
+        "diff": 65,
+        "votes": 65,
     }
 
     width_adjustment = [
@@ -657,19 +657,18 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
 
     summary_style["style_cell_conditional"].extend(width_adjustment)
 
-    # Conditional coloring for rating diff column (matching rating diff plot colors)
     rating_diff_styles = [
         {
             "if": {
-                "filter_query": "{rating diff} < 0",
-                "column_id": "rating diff",
+                "filter_query": "{diff} < 0",
+                "column_id": "diff",
             },
             "color": "#EF553B",
         },
         {
             "if": {
-                "filter_query": "{rating diff} > 0",
-                "column_id": "rating diff",
+                "filter_query": "{diff} > 0",
+                "column_id": "diff",
             },
             "color": "#636EFA",
         },
@@ -714,7 +713,7 @@ def layout():
                             ),
                             width=5,
                         ),
-                    ]
+                    ],
                 ),
                 dcc.Graph(
                     id="timeseries-viz-latest",
