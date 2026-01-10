@@ -147,7 +147,7 @@ def style_timeseries_fig(
 
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=200, r=200, t=50, b=0),
+            margin=dict(l=50, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
@@ -375,7 +375,7 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
     )
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=200, r=200, t=50, b=0),
+            margin=dict(l=50, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
@@ -495,7 +495,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
     )
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=200, r=200, t=50, b=0),
+            margin=dict(l=50, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
