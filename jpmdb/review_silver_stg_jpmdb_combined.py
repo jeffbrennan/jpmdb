@@ -117,7 +117,7 @@ def print_matched_record(record: RecordToReview) -> None:
 
 
 def clean_string(s: str) -> str:
-    s = s.lower().replace(" ", "")
+    s = s.lower().replace(" ", "").replace("&", "and").replace("the", "")
     s = re.sub('[^0-9a-zA-Z]+', '', s)
     return s
 
@@ -126,12 +126,15 @@ def review_matched_record(record: RecordToReview, auto_approve: bool) -> bool:
     if auto_approve:
         incoming_title = clean_string(record.title)
 
-        imdb_title = (record.primaryTitle or record.originalTitle)
-        if imdb_title is not None:
-            imdb_title = clean_string(imdb_title)
+        imdb_title_primary = (record.primaryTitle or record.originalTitle)
+        if imdb_title_primary is not None:
+            imdb_title_primary = clean_string(imdb_title_primary)
 
+        imdb_title_original = (record.originalTitle or record.primaryTitle)
+        if imdb_title_original is not None:
+            imdb_title_original = clean_string(imdb_title_original)
 
-        title_pass =  incoming_title == imdb_title
+        title_pass =  incoming_title == imdb_title_primary or incoming_title == imdb_title_original
         year_pass =  record.startYear is not None and record.watched_year >= record.startYear
 
         print('-' * 40)
@@ -147,28 +150,27 @@ def review_matched_record(record: RecordToReview, auto_approve: bool) -> bool:
     return typer.confirm("Do you approve this record?")
 
 
-def scrape_record(config: MatchConfig, unique_id: str | None) -> None:
+def scrape_record(config: MatchConfig, unique_id: str | None, exact: bool) -> bool:
     record = config.record
-
+    approved = False
     if unique_id is None:
         search_query = record.title
         if record.title_year is not None:
             search_query += f" {record.title_year}"
         try:
             print("scraping record:", record.title)
-            unique_ids = get_imdb_unique_ids_from_title(record.title).unique_ids
+            unique_ids = get_imdb_unique_ids_from_title(record.title, exact=exact).unique_ids
         except Exception as e:
             print(f"error scraping record: {record.title}")
             print(e)
-            return
+            return approved
 
     else:
         unique_ids = [unique_id]
 
     if len(unique_ids) == 0:
         print('no matches found!')
-        assert False
-        return
+        return approved
 
     imdb_data_filtered = (
         config.imdb_data.filter(pl.col("tconst").is_in(unique_ids))
@@ -203,9 +205,10 @@ def scrape_record(config: MatchConfig, unique_id: str | None) -> None:
         if approved:
             record.tconst = imdb_record.tconst
             log_reviewed_record(record, True)
-            return
+            return approved
 
     log_reviewed_record(record, False)
+    return approved
 
 
 def log_reviewed_record(record: StagingRecord, approved: bool) -> None:
@@ -243,7 +246,9 @@ def handle_unmatched_record(config: MatchConfig) -> None:
         tconst = typer.prompt("enter tconst")
 
     if config.scrape or config.prompt_tconst:
-        scrape_record(config, tconst)
+        matched = scrape_record(config, tconst, exact=True)
+        if not matched:
+            scrape_record(config, tconst, exact=False)
 
 
 def handle_matched_record(config: MatchConfig) -> None:
