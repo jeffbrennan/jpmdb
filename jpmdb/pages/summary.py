@@ -535,15 +535,16 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
     fig.update_yaxes(matches=None)
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
 
-    for i, annotation in enumerate(fig.layout.annotations, 0):
-        print(annotation)
+    num_years = len(df["year"].unique())
+    num_rows = (num_years + 1) // 2
+    row_height = 1.0 / num_rows
+    vertical_padding = 0.005
+
+    for i, annotation in enumerate(fig.layout.annotations):
         row_num = i // 2
-        if row_num < 1:
-            y_adjust = 0
-        else:
-            y_adjust = 0.06 + (0.015 * (row_num + 1))
-        print(i, row_num, -y_adjust)
-        annotation.y = annotation.y - y_adjust
+        row_top = 1.0 - (row_num * row_height)
+        annotation.y = row_top - vertical_padding
+        annotation.yanchor = "top"
 
     fig.update_traces(marker=dict(opacity=0.8, line=dict(width=1, color=font_color)))
     fig.update_xaxes(
@@ -562,7 +563,6 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
         margin=dict(l=0, r=0, t=50, b=0),
     )
 
-    num_rows = len(df["year"].unique()) // 2
     num_cols = 2
 
     for i in range(1, num_cols):
