@@ -3,15 +3,17 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Annotated
 
 import polars as pl
 import typer
 from pydantic import BaseModel
 
+from jpmdb.common import timeit
 from jpmdb.scrape_imdb import get_imdb_unique_ids_from_title
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 @dataclass
@@ -21,6 +23,7 @@ class MatchConfig:
     imdb_data: pl.DataFrame
     scrape: bool
     prompt_tconst: bool
+    auto_approve: bool
 
 
 class StagingRecord(BaseModel):
@@ -86,7 +89,10 @@ def print_jpmdb_record(
     else:
         title_suffix = f"({title_year})"
 
-    print("=" * 20, {watched_id}, "=" * 20)
+    header_len = 40
+    header_side = int(((header_len - 6) - len(watched_id)) / 2)
+
+    print("=" * header_side, {watched_id}, "=" * header_side)
     print(f"Title: {title} {title_suffix}")
     print(f"Category: {category}")
 
@@ -110,7 +116,33 @@ def print_matched_record(record: RecordToReview) -> None:
     print("")
 
 
-def review_matched_record(record: RecordToReview) -> bool:
+def clean_string(s: str) -> str:
+    s = s.lower().replace(" ", "")
+    s = re.sub('[^0-9a-zA-Z]+', '', s)
+    return s
+
+
+def review_matched_record(record: RecordToReview, auto_approve: bool) -> bool:
+    if auto_approve:
+        incoming_title = clean_string(record.title)
+
+        imdb_title = (record.primaryTitle or record.originalTitle)
+        if imdb_title is not None:
+            imdb_title = clean_string(imdb_title)
+
+
+        title_pass =  incoming_title == imdb_title
+        year_pass =  record.startYear is not None and record.watched_year >= record.startYear
+
+        print('-' * 40)
+        print(f"auto-matching {record.title}")
+        if (title_pass and year_pass):
+            print(f"matched to {record.tconst}")
+            print('-' * 40)
+            return True
+        else:
+            print(f"{title_pass=} {year_pass=}")
+
     print_matched_record(record)
     return typer.confirm("Do you approve this record?")
 
@@ -132,6 +164,11 @@ def scrape_record(config: MatchConfig, unique_id: str | None) -> None:
 
     else:
         unique_ids = [unique_id]
+
+    if len(unique_ids) == 0:
+        print('no matches found!')
+        assert False
+        return
 
     imdb_data_filtered = (
         config.imdb_data.filter(pl.col("tconst").is_in(unique_ids))
@@ -162,7 +199,7 @@ def scrape_record(config: MatchConfig, unique_id: str | None) -> None:
             startYear=imdb_record.startYear,
         )
 
-        approved = review_matched_record(review_record)
+        approved = review_matched_record(review_record, config.auto_approve)
         if approved:
             record.tconst = imdb_record.tconst
             log_reviewed_record(record, True)
@@ -210,7 +247,7 @@ def handle_unmatched_record(config: MatchConfig) -> None:
 
 
 def handle_matched_record(config: MatchConfig) -> None:
-    approved = review_matched_record(config.review_record)
+    approved = review_matched_record(config.review_record, config.auto_approve)
     if approved:
         log_reviewed_record(config.record, True)
         return
@@ -251,6 +288,7 @@ def review(
     prompt_tconst: bool = False,
     review_again: bool = False,
     watched_id: str | None = None,
+    auto_approve: bool = False,
 ) -> None:
     base_dir = Path(__file__).parents[1] / "data" / "silver"
     base_path = base_dir / "jpmdb" / "stg_jpmdb_combined"
@@ -292,6 +330,7 @@ def review(
             scrape=scrape,
             prompt_tconst=prompt_tconst,
             review_record=record,
+            auto_approve=auto_approve,
         )
 
         if record.tconst is None:
