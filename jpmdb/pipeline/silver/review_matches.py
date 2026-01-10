@@ -118,7 +118,7 @@ def print_matched_record(record: RecordToReview) -> None:
 
 def clean_string(s: str) -> str:
     s = s.lower().replace(" ", "").replace("&", "and").replace("the", "")
-    s = re.sub('[^0-9a-zA-Z]+', '', s)
+    s = re.sub("[^0-9a-zA-Z]+", "", s)
     return s
 
 
@@ -126,22 +126,27 @@ def review_matched_record(record: RecordToReview, auto_approve: bool) -> bool:
     if auto_approve:
         incoming_title = clean_string(record.title)
 
-        imdb_title_primary = (record.primaryTitle or record.originalTitle)
+        imdb_title_primary = record.primaryTitle or record.originalTitle
         if imdb_title_primary is not None:
             imdb_title_primary = clean_string(imdb_title_primary)
 
-        imdb_title_original = (record.originalTitle or record.primaryTitle)
+        imdb_title_original = record.originalTitle or record.primaryTitle
         if imdb_title_original is not None:
             imdb_title_original = clean_string(imdb_title_original)
 
-        title_pass =  incoming_title == imdb_title_primary or incoming_title == imdb_title_original
-        year_pass =  record.startYear is not None and record.watched_year >= record.startYear
+        title_pass = (
+            incoming_title == imdb_title_primary
+            or incoming_title == imdb_title_original
+        )
+        year_pass = (
+            record.startYear is not None and record.watched_year >= record.startYear
+        )
 
-        print('-' * 40)
+        print("-" * 40)
         print(f"auto-matching {record.title}")
-        if (title_pass and year_pass):
+        if title_pass and year_pass:
             print(f"matched to {record.tconst}")
-            print('-' * 40)
+            print("-" * 40)
             return True
         else:
             print(f"{title_pass=} {year_pass=}")
@@ -163,15 +168,16 @@ def scrape_record(config: MatchConfig, unique_id: str | None, exact: bool) -> bo
         search_query += f" {record.title_year}"
     try:
         print("scraping record:", record.title)
-        unique_ids = get_imdb_unique_ids_from_title(record.title, exact=exact).unique_ids
+        unique_ids = get_imdb_unique_ids_from_title(
+            record.title, exact=exact
+        ).unique_ids
     except Exception as e:
         print(f"error scraping record: {record.title}")
         print(e)
         return approved
 
-
     if len(unique_ids) == 0:
-        print('no matches found!')
+        print("no matches found!")
         return approved
 
     imdb_data_filtered = (
@@ -187,7 +193,6 @@ def scrape_record(config: MatchConfig, unique_id: str | None, exact: bool) -> bo
     if len(imdb_data_filtered) == 0:
         print("no match in db!")
         return False
-
 
     imdb_data_filtered = [IMDBRecordData(**record) for record in imdb_data_filtered]
     imdb_data_filtered = sorted(  # pyright: ignore [reportCallIssue]
