@@ -143,6 +143,7 @@ def style_timeseries_fig(
             )
         ],
         legend_title_text="",
+        legend=dict(x=1.005, xanchor="left", itemsizing="constant"),
     )
 
     if screen_width != ScreenWidth.xs:
@@ -372,6 +373,7 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
             )
         ],
         legend_title_text="rating compared to imdb",
+        legend=dict(x=1.005, xanchor="left"),
     )
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
@@ -493,6 +495,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
             )
         ],
         legend_title_text="",
+        legend=dict(x=1.005, xanchor="left"),
     )
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
