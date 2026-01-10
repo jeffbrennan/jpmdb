@@ -74,7 +74,10 @@ def get_records() -> pd.DataFrame:
                 pl.col("watched_id").alias("id"),
                 "watched_year",
                 "title",
-                pl.col("titleType").alias("type"),
+                pl.when(pl.col("titleType").str.starts_with("tv"))
+                .then(pl.lit("tv"))
+                .otherwise(pl.col("titleType"))
+                .alias("type"),
                 pl.col("startYear").alias("year"),
                 "genres",
                 "rating",
@@ -604,7 +607,7 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
 )
 def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     df = get_records()
-    df.drop(columns=["watched_year", "title", "genres"], inplace=True)
+    df.drop(columns=["watched_year", "genres"], inplace=True)
 
     summary_style = get_dt_style(dark_mode)
     summary_style["style_table"]["height"] = "auto"
