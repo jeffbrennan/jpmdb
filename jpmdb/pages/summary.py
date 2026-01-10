@@ -97,7 +97,7 @@ def style_timeseries_fig(
 ) -> Figure:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(categoryorder="array", categoryarray=watched_id_list)
-    fig.update_yaxes(showline=False, showgrid=False, zeroline=False)
+    fig.update_yaxes(showline=False, showgrid=False, zeroline=False, title_standoff=5)
 
     trace_color = font_color.replace("rgb", "rgba").replace(")", ", 0.5)")
     fig.update_traces(
@@ -135,7 +135,7 @@ def style_timeseries_fig(
                 type="rect",
                 xref="paper",
                 yref="paper",
-                x0=0,
+                x0=0.005,
                 y0=0,
                 x1=1,
                 y1=1,
@@ -147,7 +147,7 @@ def style_timeseries_fig(
 
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=50, r=50, t=50, b=0),
+            margin=dict(l=70, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
@@ -355,7 +355,7 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
     fig.update_xaxes(
         title="imdb rating", showline=False, showgrid=False, zeroline=False
     )
-    fig.update_yaxes(title="rating", showline=False, showgrid=False, zeroline=False)
+    fig.update_yaxes(title="rating", showline=False, showgrid=False, zeroline=False, title_standoff=5)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -364,7 +364,7 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
                 type="rect",
                 xref="paper",
                 yref="paper",
-                x0=0,
+                x0=0.005,
                 y0=0,
                 x1=1,
                 y1=1,
@@ -375,7 +375,7 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
     )
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=50, r=50, t=50, b=0),
+            margin=dict(l=70, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
@@ -463,6 +463,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
         showline=False,
         showgrid=False,
         zeroline=False,
+        title_standoff=5,
     )
 
     for i, genre in enumerate(df["genre"].unique()):
@@ -484,7 +485,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
                 type="rect",
                 xref="paper",
                 yref="paper",
-                x0=0,
+                x0=0.005,
                 y0=0,
                 x1=1,
                 y1=1,
@@ -495,7 +496,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
     )
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=50, r=50, t=50, b=0),
+            margin=dict(l=70, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
