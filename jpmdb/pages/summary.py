@@ -76,13 +76,13 @@ def _get_records_cached() -> pd.DataFrame:
                     pl.lit(")"),
                 ]
             ).alias("title"),
-
         )
         .select(
             [
                 pl.col("watched_id").alias("id"),
                 "watched_year",
-                "title",
+                pl.col("title").alias("title_with_link"),
+                pl.col("title_with_season").alias("title"),
                 "type",
                 pl.col("startYear").alias("year"),
                 "genres",
@@ -106,7 +106,9 @@ def style_timeseries_fig(
 ) -> Figure:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(categoryorder="array", categoryarray=watched_id_list)
-    fig.update_yaxes(title="rating", showline=False, showgrid=False, zeroline=False, title_standoff=5)
+    fig.update_yaxes(
+        title="rating", showline=False, showgrid=False, zeroline=False, title_standoff=5
+    )
 
     trace_color = font_color.replace("rgb", "rgba").replace(")", ", 0.5)")
     fig.update_traces(
@@ -651,7 +653,11 @@ def trigger_top_fade(table_ready, histogram_ready, timeseries_latest_ready):
     ],
 )
 def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
-    df = get_records().drop(columns=["watched_year", "genres"])
+    df = (
+        get_records()
+        .drop(columns=["watched_year", "genres", "title"])
+        .rename(columns={"title_with_link": "title"})
+    )
 
     summary_style = get_dt_style(dark_mode)
     summary_style["style_table"]["height"] = "85vh"
