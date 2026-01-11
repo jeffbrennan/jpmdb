@@ -14,13 +14,15 @@ class IMDBScrapingResult(BaseModel):
     retrieved_at: datetime.datetime
 
 
-def get_imdb_unique_ids_from_title(title: str) -> IMDBScrapingResult:
+def get_imdb_unique_ids_from_title(title: str, exact: bool) -> IMDBScrapingResult:
     url = f"https://www.imdb.com/find/?q={title.replace(' ', '%20')}"
+    if exact:
+        url += "&exact=true"
 
+    print(url)
     response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     soup = BeautifulSoup(response.text, "html.parser")
-
-    results = soup.find_all("a", class_="ipc-metadata-list-summary-item__t")
+    results = soup.find_all("a", class_="ipc-title-link-wrapper")
     unique_ids = []
     for result in results:
         try:
@@ -44,7 +46,7 @@ def main():
     all_results = []
     for title in titles_to_scrape:
         time.sleep(random.randint(300, 1000) / 1000)
-        result = get_imdb_unique_ids_from_title(title)
+        result = get_imdb_unique_ids_from_title(title, exact=False)
 
         print(result)
         all_results.append(result)

@@ -3,6 +3,7 @@
     src: url("/assets/fonts/jetbrainsmonoregular.woff2") format("woff2");
     font-weight: 100 900;
     font-style: normal;
+    font-display: swap;
 }
 
 #jpmdb-page,
@@ -50,7 +51,6 @@ body,
     font-weight: 600 !important;
 }
 
-
 .gtitle,
 .g-gtitle,
 .plotly-graph-div,
@@ -68,6 +68,17 @@ body,
 
 ._dash-loading {
     display: none !important;
+}
+
+/* Hide all summary content until fade is triggered */
+#summary-fade-top:not(.show) > *,
+#summary-fade-bottom:not(.show) > * {
+    visibility: hidden;
+}
+
+#summary-fade-top.show > *,
+#summary-fade-bottom.show > * {
+    visibility: visible;
 }
 
 /* date slider */
@@ -134,7 +145,6 @@ body,
     background-color: rgb(242, 240, 227) !important;
 }
 
-
 .dark-mode .rc-slider-handle:hover,
 .dark-mode .rc-slider-handle:focus,
 .dark-mode .rc-slider-handle:active,
@@ -147,13 +157,11 @@ body,
     background-color: rgb(33, 33, 33);
 }
 
-
 .dark-mode .rc-slider-rail,
 .dark-mode .rc-slider-dot {
     background-color: rgb(33, 33, 33) !important;
     border: solid 1px rgb(242, 240, 227) !important;
 }
-
 
 /* repo selector */
 
@@ -239,7 +247,6 @@ body,
     border: 2px rgb(33, 33, 33) !important;
 }
 
-
 .dark-mode .Select-menu-outer {
     background-color: rgb(33, 33, 33) !important;
     border: 2px solid rgb(242, 240, 227) !important;
@@ -261,7 +268,6 @@ body,
 .dark-mode .VirtualizedSelectFocusedOption {
     background-color: rgb(33, 33, 33) !important;
 }
-
 
 .navbar-container {
     display: grid !important;
@@ -293,7 +299,6 @@ body,
     border-radius: 10px !important;
 }
 
-
 /* light */
 .light-mode .navbar-toggler {
     border: solid 4px rgb(33, 33, 33) !important;
@@ -323,7 +328,6 @@ body,
     width: 100% !important;
 }
 
-
 #color-mode-switch {
     grid-area: switch !important;
     justify-self: end !important;
@@ -333,7 +337,6 @@ body,
     padding: 0 0 28px !important;
     margin: 0;
 }
-
 
 @media (max-width: 767px) {
     .nav-link {
@@ -381,12 +384,9 @@ body,
         border: 2px solid rgba(242, 240, 227, 1) !important;
         border-radius: 20px !important;
     }
-
 }
 
 @media (min-width: 768px) {
-
-
     #navbar a {
         margin-right: 15px;
     }
@@ -408,9 +408,7 @@ body,
         margin-left: 0 !important;
         padding-left: 10px;
     }
-
 }
-
 
 /* table styling */
 
@@ -431,7 +429,6 @@ body,
     margin: 0 !important;
     font-size: 0.8em !important;
 }
-
 
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td,
 .dash-cell-value {
@@ -469,58 +466,93 @@ td.dash-cell.cell--selected.focused {
     color: rgb(242, 240, 227) !important;
 }
 
-
 /* table border */
-.light-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner {
+.light-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner {
     border: 2px solid rgb(33, 33, 33) !important;
 }
 
-
 /* headers */
-.light-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+.light-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    th {
     border-bottom: 2px solid rgb(242, 240, 227) !important;
     border-right: 2px solid rgb(242, 240, 227) !important;
     background-color: rgb(33, 33, 33) !important;
     color: rgb(242, 240, 227) !important;
 }
 
-.light-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th:last-child {
+.light-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    th:last-child {
     border-right: none !important;
 }
 
-
 /* Remove right border for the last header cell */
 /* filters */
-.light-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .dash-filter {
+.light-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    .dash-filter {
     border-right: 2px solid rgb(242, 240, 227) !important;
 }
 
-.light-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .dash-filter>div input[type="text"] {
+.light-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    .dash-filter
+    > div
+    input[type="text"] {
     color: rgb(242, 240, 227) !important;
 }
 
-
 /* cells  */
-.light-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+.light-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    td {
     border-bottom: 1px solid rgb(33, 33, 33) !important;
     border-right: 2px solid rgb(33, 33, 33) !important;
 }
 
-.light-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr td:last-child {
+.light-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    tr
+    td:last-child {
     border-right: none !important;
 }
 
 /* row change on hover */
-.light-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
+.light-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    tr:hover
+    td {
     background-color: rgba(255, 120, 23, 0.3) !important;
 }
-
 
 .light-mode .current-page {
     font-size: 1em !important;
 }
 
-.light-mode .dash-table-container .previous-next-container .page-number .current-page-container input.current-page {
+.light-mode
+    .dash-table-container
+    .previous-next-container
+    .page-number
+    .current-page-container
+    input.current-page {
     border-bottom: 1px solid rgb(33, 33, 33) !important;
 }
 
@@ -534,53 +566,108 @@ td.dash-cell.cell--selected.focused {
     color: rgb(33, 33, 33) !important;
 }
 
-
 /* table border */
-.dark-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner {
+.dark-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner {
     border: 2px solid rgb(242, 240, 227) !important;
 }
 
-
 /* headers */
-.dark-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+.dark-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    th {
     border-bottom: 2px solid rgb(33, 33, 33) !important;
     border-right: 2px solid rgb(33, 33, 33) !important;
     background-color: rgb(242, 240, 227) !important;
     color: rgb(33, 33, 33) !important;
 }
 
-.dark-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th:last-child {
+.dark-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    th:last-child {
     border-right: none !important;
 }
 
-
 /* Remove right border for the last header cell */
 /* filters */
-.dark-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .dash-filter {
+.dark-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    .dash-filter {
     border-right: 2px solid rgb(33, 33, 33) !important;
 }
 
-.dark-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .dash-filter>div input[type="text"] {
+.dark-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    .dash-filter
+    > div
+    input[type="text"] {
     color: rgb(33, 33, 33) !important;
 }
 
-
 /* cells  */
-.dark-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+.dark-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    td {
     border-bottom: 1px solid rgb(242, 240, 227) !important;
     border-right: 2px solid rgb(242, 240, 227) !important;
 }
 
-.dark-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr td:last-child {
+.dark-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    tr
+    td:last-child {
     border-right: none !important;
 }
 
-.dark-mode .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
+.dark-mode
+    .dash-table-container
+    .dash-spreadsheet-container
+    .dash-spreadsheet-inner
+    tr:hover
+    td {
     background-color: rgb(147, 65, 54) !important;
 }
 
 .dark-mode .current-page {
     font-size: 1em !important;
+}
+
+/* diff column - bold colored text */
+td[data-dash-column="diff"] .dash-cell-value {
+    font-weight: 600 !important;
+}
+
+/* table hyperlinks - match text color */
+.light-mode .dash-table-container a {
+    color: rgb(33, 33, 33) !important;
+    text-decoration: none;
+}
+
+.light-mode .dash-table-container a:hover {
+    text-decoration: underline;
+}
+
+.dark-mode .dash-table-container a {
+    color: rgb(242, 240, 227) !important;
+    text-decoration: none;
+}
+
+.dark-mode .dash-table-container a:hover {
+    text-decoration: underline;
 }
 
 .plotly .yaxis .domain {

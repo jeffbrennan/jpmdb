@@ -1,3 +1,5 @@
+import datetime
+from functools import lru_cache
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
@@ -37,47 +39,57 @@ def get_fig_margins(fig_type: str):
 
 @timeit
 def get_records() -> pd.DataFrame:
+    return _get_records_cached().copy()
+
+
+@lru_cache(maxsize=1)
+def _get_records_cached() -> pd.DataFrame:
     path = Path(__file__).parents[2] / "data" / "gold" / "jpmdb"
     df = (
         pl.read_delta(str(path))
         .with_columns(
             [
                 pl.col("genres").list.join(", ").alias("genres"),
-                pl.col("title").alias("jp_title"),
+                pl.when(pl.col("season").is_not_null())
+                .then(
+                    pl.concat_str(
+                        pl.col("primaryTitle"), pl.lit(" Season "), pl.col("season")
+                    )
+                )
+                .otherwise(pl.col("primaryTitle"))
+                .alias("title_with_season"),
+                pl.when(pl.col("titleType").str.starts_with("tv"))
+                .then(pl.lit("tv"))
+                .otherwise(pl.col("titleType"))
+                .alias("type"),
             ]
         )
         .with_columns(
-            pl.when(pl.col("primaryTitle").is_not_null())
-            .then(
-                pl.concat_str(
-                    [
-                        pl.lit("["),
-                        pl.col("primaryTitle"),
-                        pl.lit("]"),
-                        pl.lit("("),
-                        pl.lit("https://www.imdb.com/title/"),
-                        pl.col("tconst"),
-                        pl.lit(")"),
-                    ]
-                )
-            )
-            .otherwise(pl.col("jp_title"))
-            .alias("title"),
+            pl.concat_str(
+                [
+                    pl.lit("["),
+                    pl.col("title_with_season"),
+                    pl.lit("]"),
+                    pl.lit("("),
+                    pl.lit("https://www.imdb.com/title/"),
+                    pl.col("tconst"),
+                    pl.lit(")"),
+                ]
+            ).alias("title"),
         )
         .select(
             [
                 pl.col("watched_id").alias("id"),
                 "watched_year",
-                "jp_title",
-                "title",
-                pl.col("titleType").alias("type"),
+                pl.col("title").alias("title_with_link"),
+                pl.col("title_with_season").alias("title"),
+                "type",
                 pl.col("startYear").alias("year"),
-                "season",
                 "genres",
-                "rating",
-                pl.col("averageRating").alias("imdb rating"),
-                (pl.col("rating") - pl.col("averageRating")).alias("rating diff"),
-                pl.col("numVotes").alias("imdb votes"),
+                pl.col("rating").alias("juan"),
+                pl.col("averageRating").alias("imdb"),
+                (pl.col("rating") - pl.col("averageRating")).alias("diff"),
+                pl.col("numVotes").alias("votes"),
             ]
         )
     )
@@ -86,14 +98,22 @@ def get_records() -> pd.DataFrame:
 
 @timeit
 def style_timeseries_fig(
-    fig: Figure, watched_id_list: list[str], font_color: str, screen_width: str
+    fig: Figure,
+    watched_id_list: list[str],
+    font_color: str,
+    screen_width: str,
+    point_size: int,
 ) -> Figure:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(categoryorder="array", categoryarray=watched_id_list)
-    fig.update_yaxes(showline=False, showgrid=False, zeroline=False)
+    fig.update_yaxes(
+        title="rating", showline=False, showgrid=False, zeroline=False, title_standoff=5
+    )
 
     trace_color = font_color.replace("rgb", "rgba").replace(")", ", 0.5)")
-    fig.update_traces(marker=dict(line=dict(width=1, color=trace_color)))
+    fig.update_traces(
+        marker=dict(size=point_size, line=dict(width=1, color=trace_color))
+    )
 
     year_groups = {}
     for uid in watched_id_list:
@@ -116,6 +136,7 @@ def style_timeseries_fig(
         ticktext=ticktext,
         title="",
     )
+
     fig.update_layout(
         xaxis_range=[
             -5,
@@ -126,7 +147,7 @@ def style_timeseries_fig(
                 type="rect",
                 xref="paper",
                 yref="paper",
-                x0=0,
+                x0=0.005,
                 y0=0,
                 x1=1,
                 y1=1,
@@ -134,11 +155,12 @@ def style_timeseries_fig(
             )
         ],
         legend_title_text="",
+        legend=dict(x=1.005, xanchor="left", itemsizing="constant"),
     )
 
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=200, r=200, t=50, b=0),
+            margin=dict(l=70, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
@@ -148,23 +170,35 @@ def style_timeseries_fig(
     return fig
 
 
+@lru_cache(maxsize=1)
+def _compute_trendline():
+    df = _get_records_cached()
+    watched_id_list = df["id"].to_list()
+    smoothed = lowess(df["juan"], range(len(watched_id_list)), frac=0.025)
+    x_trend = tuple(watched_id_list[i] for i, _ in enumerate(smoothed[:, 0]))
+    y_trend = tuple(smoothed[:, 1])
+    years = sorted(set(i.split("_")[0] for i in watched_id_list))
+    return x_trend, y_trend, years, watched_id_list
+
+
 @timeit
 def add_timeseries_trendline(
     df: pd.DataFrame, fig: Figure, watched_id_list: list[str], font_color: str
 ):
-    years = sorted(set(i.split("_")[0] for i in watched_id_list))
+    x_trend, y_trend, years, _ = _compute_trendline()
     for year in years[1:]:
         boundary_id = watched_id_list.index(year + "_001")
         fig.add_vline(x=boundary_id, line_color=font_color, layer="below")
-    smoothed = lowess(df["rating"], range(len(watched_id_list)), frac=0.025)
-    x_trend = [watched_id_list[i] for i, _ in enumerate(smoothed[:, 0])]
-    y_trend = smoothed[:, 1]
+
+    outer_line_width = 6
+    inner_line_width = 3
+
     fig.add_trace(
         go.Scatter(
             x=x_trend,
             y=y_trend,
             mode="lines",
-            line=dict(shape="spline", color=font_color, width=6),
+            line=dict(shape="spline", color=font_color, width=outer_line_width),
             showlegend=False,
         )
     )
@@ -173,7 +207,9 @@ def add_timeseries_trendline(
             x=x_trend,
             y=y_trend,
             mode="lines",
-            line=dict(shape="spline", color="rgb(247, 111, 83)", width=3),
+            line=dict(
+                shape="spline", color="rgb(247, 111, 83)", width=inner_line_width
+            ),
             showlegend=False,
         )
     )
@@ -194,7 +230,7 @@ def get_color_palette(groups: list, n_colors: int = 10):
     [
         Output("timeseries-viz", "figure"),
         Output("timeseries-viz", "style"),
-        Output("summary-fade", "is_in"),
+        Output("summary-fade-bottom", "is_in"),
     ],
     [
         Input("color-mode-switch", "value"),
@@ -203,13 +239,39 @@ def get_color_palette(groups: list, n_colors: int = 10):
 )
 @timeit
 def get_timeseries_viz(dark_mode: bool, screen_width: str):
+    fig, style = _timeseries_viz(dark_mode, screen_width, False)
+    return fig, style, True
+
+
+@callback(
+    [
+        Output("timeseries-viz-latest", "figure"),
+        Output("timeseries-viz-latest", "style"),
+        Output("timeseries-latest-ready", "data"),
+    ],
+    [
+        Input("color-mode-switch", "value"),
+        Input("breakpoints", "widthBreakpoint"),
+    ],
+)
+@timeit
+def get_timeseries_viz_latest(dark_mode: bool, screen_width: str):
+    fig, style = _timeseries_viz(dark_mode, screen_width, True)
+    return fig, style, True
+
+
+def _timeseries_viz(dark_mode: bool, screen_width: str, filter_latest_year: bool):
     df = get_records()
+    if filter_latest_year:
+        latest_year = datetime.datetime.now().year - 1
+        df = df.query(f"watched_year >= {latest_year}")
+
     df["watched_year"] = df["watched_year"].astype(str)
-    df["jp_title_hover"] = df["id"] + " - " + df["jp_title"]
+    df["title_hover"] = df["id"] + " - " + df["title"]
 
     _, font_color = get_site_colors(dark_mode, contrast=False)
 
-    watched_id_list = df["id"].to_list()
+    watched_id_list: list[str] = df["id"].to_list()  # pyright: ignore[reportAssignmentType]
     colors = qualitative.Plotly
 
     types = list(df["type"].unique())
@@ -220,24 +282,28 @@ def get_timeseries_viz(dark_mode: bool, screen_width: str):
     fig = px.scatter(
         df,
         x="id",
-        y="rating",
+        y="juan",
         color="type",
         color_discrete_map=color_map,
-        hover_name="jp_title_hover",
+        hover_name="title_hover",
         hover_data={
-            "rating": ":.1f",
-            "imdb rating": ":.1f",
-            "rating diff": ":.1f",
-            "imdb votes": ":,",
+            "juan": ":.1f",
+            "imdb": ":.1f",
+            "diff": ":.1f",
+            "votes": ":,",
             "id": False,
         },
         template=template,
         opacity=0.8,
     )
-    fig = style_timeseries_fig(fig, watched_id_list, font_color, screen_width)
-    fig = add_timeseries_trendline(df, fig, watched_id_list, font_color)
+    point_size = 12 if filter_latest_year else 6
+    fig = style_timeseries_fig(
+        fig, watched_id_list, font_color, screen_width, point_size
+    )
+    if not filter_latest_year:
+        fig = add_timeseries_trendline(df, fig, watched_id_list, font_color)
 
-    return fig, {}, True
+    return fig, {}
 
 
 @callback(
@@ -255,37 +321,32 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
     df = get_records()[
         [
             "id",
-            "jp_title",
             "title",
-            "rating",
-            "imdb rating",
-            "rating diff",
-            "imdb votes",
+            "juan",
+            "imdb",
+            "diff",
+            "votes",
         ]
     ]
 
-    df = df.dropna(subset=["rating", "imdb rating"])
+    df = df.dropna(subset=["juan", "imdb"])
 
-    df["rated_higher"] = df["rating diff"] > 0
-    df["rated_higher"] = np.where(
-        df["rating diff"] > 0, "higher than imdb", "lower than imdb"
-    )
-    df["hover_title"] = df["id"] + " - " + df["jp_title"]
+    df["rated_higher"] = df["diff"] > 0
+    df["rated_higher"] = np.where(df["diff"] > 0, "higher than imdb", "lower than imdb")
+    df["hover_title"] = df["id"] + " - " + df["title"]
 
     jitter = 0.05
-    df["rating_jitter"] = df["rating"] + np.random.uniform(
-        -jitter, jitter, size=len(df)
-    )
-    df["imdb rating_jitter"] = df["imdb rating"] + np.random.uniform(
+    df["rating_jitter"] = df["juan"] + np.random.uniform(-jitter, jitter, size=len(df))
+    df["imdb rating_jitter"] = df["imdb"] + np.random.uniform(
         -jitter, jitter, size=len(df)
     )
 
     min_marker = 5
-    max_marker = 80
-    min_votes = df["imdb votes"].min()
-    max_votes = df["imdb votes"].max()
+    max_marker = 30
+    min_votes = df["votes"].min()
+    max_votes = df["votes"].max()
     df["scaled_votes"] = min_marker + (
-        (df["imdb votes"] - min_votes) / (max_votes - min_votes)
+        (df["votes"] - min_votes) / (max_votes - min_votes)
     ) * (max_marker - min_marker)
 
     _, font_color = get_site_colors(dark_mode, contrast=False)
@@ -296,10 +357,11 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
         color="rated_higher",
         hover_name="hover_title",
         hover_data={
-            "rating": ":.1f",
-            "imdb rating": ":.1f",
-            "rating diff": ":.1f",
-            "imdb votes": ":,",
+            "juan": ":.1f",
+            "imdb": ":.1f",
+            "diff": ":.1f",
+            "votes": ":,",
+            "rated_higher": False,
             "rating_jitter": False,
             "imdb rating_jitter": False,
             "scaled_votes": False,
@@ -311,7 +373,9 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
     fig.update_xaxes(
         title="imdb rating", showline=False, showgrid=False, zeroline=False
     )
-    fig.update_yaxes(title="rating", showline=False, showgrid=False, zeroline=False)
+    fig.update_yaxes(
+        title="rating", showline=False, showgrid=False, zeroline=False, title_standoff=5
+    )
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -320,7 +384,7 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
                 type="rect",
                 xref="paper",
                 yref="paper",
-                x0=0,
+                x0=0.005,
                 y0=0,
                 x1=1,
                 y1=1,
@@ -328,10 +392,11 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
             )
         ],
         legend_title_text="rating compared to imdb",
+        legend=dict(x=1.005, xanchor="left"),
     )
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=200, r=200, t=50, b=0),
+            margin=dict(l=70, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
@@ -343,6 +408,11 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
 
 @timeit
 def get_genre_df():
+    return _get_genre_df_cached().copy()
+
+
+@lru_cache(maxsize=1)
+def _get_genre_df_cached():
     path = Path(__file__).parents[2] / "data" / "gold" / "jpmdb"
     df = (
         pl.read_delta(str(path))
@@ -419,6 +489,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
         showline=False,
         showgrid=False,
         zeroline=False,
+        title_standoff=5,
     )
 
     for i, genre in enumerate(df["genre"].unique()):
@@ -427,7 +498,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
         fig.add_annotation(
             x=i,
             y=10.75,
-            text=f"n={n_titles}<br>avg={avg_rating:.1f}",
+            text=f"n={n_titles}<br>{avg_rating:.1f}",
             showarrow=False,
             font=dict(color=font_color),
         )
@@ -440,7 +511,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
                 type="rect",
                 xref="paper",
                 yref="paper",
-                x0=0,
+                x0=0.005,
                 y0=0,
                 x1=1,
                 y1=1,
@@ -448,10 +519,11 @@ def get_box_genres(dark_mode: bool, screen_width: str):
             )
         ],
         legend_title_text="",
+        legend=dict(x=1.005, xanchor="left"),
     )
     if screen_width != ScreenWidth.xs:
         fig.update_layout(
-            margin=dict(l=200, r=200, t=50, b=0),
+            margin=dict(l=70, r=50, t=50, b=0),
         )
     else:
         fig.update_layout(
@@ -465,6 +537,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
     [
         Output("ratings-histogram", "figure"),
         Output("ratings-histogram", "style"),
+        Output("histogram-ready", "data"),
     ],
     [
         Input("color-mode-switch", "value"),
@@ -477,25 +550,38 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
     bg_color, font_color = get_site_colors(dark_mode, contrast=False)
     fig = px.histogram(
         df,
-        x="rating",
+        x="juan",
         nbins=10,
         facet_col="year",
         facet_col_wrap=2,
+        facet_row_spacing=0.02,
         template="plotly_dark" if dark_mode else "plotly_white",
     )
 
-    fig.update_yaxes(matches=None)
+    fig.update_yaxes(matches=None, rangemode="tozero")
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
 
-    for i, annotation in enumerate(fig.layout.annotations, 0):
-        print(annotation)
+    num_years = len(df["year"].unique())
+    num_rows = (num_years + 1) // 2
+    row_height = 1.0 / num_rows
+    label_space = 0.03
+    plot_height = row_height - label_space
+
+    for i in range(num_years):
         row_num = i // 2
-        if row_num < 1:
-            y_adjust = 0
-        else:
-            y_adjust = 0.06 + (0.015 * (row_num + 1))
-        print(i, row_num, -y_adjust)
-        annotation.y = annotation.y - y_adjust
+        row_bottom = 1.0 - ((row_num + 1) * row_height)
+        row_top = row_bottom + plot_height
+
+        yaxis_name = "yaxis" if i == 0 else f"yaxis{i + 1}"
+        if hasattr(fig.layout, yaxis_name):
+            fig.layout[yaxis_name].domain = [row_bottom, row_top]
+
+    for i, annotation in enumerate(fig.layout.annotations):
+        row_num = i // 2
+        row_top = 1.0 - (row_num * row_height)
+        annotation.y = row_top - 0.005
+        annotation.yanchor = "top"
+        annotation.font = dict(size=14, weight="bold")
 
     fig.update_traces(marker=dict(opacity=0.8, line=dict(width=1, color=font_color)))
     fig.update_xaxes(
@@ -511,10 +597,9 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
         legend_title_text="",
     )
     fig.update_layout(
-        margin=dict(l=0, r=0, t=50, b=0),
+        margin=dict(l=0, r=0, t=0, b=0),
     )
 
-    num_rows = len(df["year"].unique()) // 2
     num_cols = 2
 
     for i in range(1, num_cols):
@@ -541,13 +626,26 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
             line=dict(color=font_color, width=2),
         )
 
-    return fig, {"height": "100%", "maxHeight": "100%"}
+    return fig, {}, True
+
+
+@callback(
+    Output("summary-fade-top", "is_in"),
+    [
+        Input("table-ready", "data"),
+        Input("histogram-ready", "data"),
+        Input("timeseries-latest-ready", "data"),
+    ],
+)
+def trigger_top_fade(table_ready, histogram_ready, timeseries_latest_ready):
+    return table_ready and histogram_ready and timeseries_latest_ready
 
 
 @callback(
     [
         Output("summary-table", "children"),
         Output("summary-table", "style"),
+        Output("table-ready", "data"),
     ],
     [
         Input("color-mode-switch", "value"),
@@ -555,11 +653,14 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
     ],
 )
 def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
-    df = get_records()
-    df.drop(columns=["watched_year", "jp_title"], inplace=True)
+    df = (
+        get_records()
+        .drop(columns=["watched_year", "genres", "title"])
+        .rename(columns={"title_with_link": "title"})
+    )
 
     summary_style = get_dt_style(dark_mode)
-    summary_style["style_table"]["height"] = "auto"
+    summary_style["style_table"]["height"] = "85vh"
     sm_margins, lg_margins = get_fig_margins("table")
 
     if breakpoint_name in [ScreenWidth.xs, ScreenWidth.sm]:
@@ -569,8 +670,6 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     else:
         summary_style["style_table"].update(lg_margins)
 
-    print(summary_style["style_table"])
-
     tbl_cols = []
     markdown_style = {"presentation": "markdown"}
     float_style = {"type": "numeric", "format": {"specifier": ".1f"}}
@@ -578,23 +677,21 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
 
     col_mapping = {
         "title": markdown_style,
-        "rating": float_style,
-        "imdb rating": float_style,
-        "rating diff": float_style,
-        "imdb votes": int_style,
+        "juan": float_style,
+        "imdb": float_style,
+        "diff": float_style,
+        "votes": int_style,
     }
 
     width_mapping = {
-        "id": 80,
-        "title": 150,
-        "type": 75,
-        "year": 75,
-        "season": 75,
-        "genres": 100,
-        "rating": 75,
-        "imdb rating": 75,
-        "rating diff": 75,
-        "imdb votes": 75,
+        "id": 75,
+        "title": 200,
+        "type": 65,
+        "year": 65,
+        "rating": 65,
+        "imdb rating": 65,
+        "diff": 65,
+        "votes": 65,
     }
 
     width_adjustment = [
@@ -607,6 +704,27 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     ]
 
     summary_style["style_cell_conditional"].extend(width_adjustment)
+
+    rating_diff_styles = [
+        {
+            "if": {
+                "filter_query": "{diff} < 0",
+                "column_id": "diff",
+            },
+            "color": "#EF553B",
+        },
+        {
+            "if": {
+                "filter_query": "{diff} > 0",
+                "column_id": "diff",
+            },
+            "color": "#636EFA",
+        },
+    ]
+
+    # Color scale for rating column (salmon low, blue high)
+    summary_style["style_data_conditional"].extend(rating_diff_styles)
+
     for col in df.columns:
         if col in col_mapping:
             tbl_cols.append({**col_mapping[col], "id": col, "name": col})
@@ -616,51 +734,62 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
     tbl = dash_table.DataTable(
         df.to_dict("records"),
         columns=tbl_cols,
+        sort_by=[{"column_id": "id", "direction": "desc"}],
         **summary_style,
     )
 
-    return tbl, {}
+    return tbl, {}, True
 
 
 def layout():
     return [
+        dcc.Store(id="table-ready", data=False),
+        dcc.Store(id="histogram-ready", data=False),
+        dcc.Store(id="timeseries-latest-ready", data=False),
         dbc.Fade(
-            id="summary-fade",
+            id="summary-fade-top",
             children=[
                 dbc.Row(
                     children=[
                         dbc.Col(
                             id="summary-table",
-                            style={"visibility": "hidden"},
                             width=7,
                         ),
                         dbc.Col(
                             dcc.Graph(
                                 id="ratings-histogram",
-                                style={"visibility": "hidden"},
                                 config={"displayModeBar": False},
+                                style={"height": "85vh"},
                             ),
                             width=5,
                         ),
-                    ]
+                    ],
                 ),
                 dcc.Graph(
+                    id="timeseries-viz-latest",
+                    config={"displayModeBar": False},
+                ),
+            ],
+            style={"transition": "opacity 200ms ease-in"},
+            is_in=False,
+        ),
+        dbc.Fade(
+            id="summary-fade-bottom",
+            children=[
+                dcc.Graph(
                     id="timeseries-viz",
-                    style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
                 dcc.Graph(
                     id="rating-diff-viz",
-                    style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
                 dcc.Graph(
                     id="box-viz",
-                    style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
             ],
-            style={"transition": "opacity 200ms ease-in", "minHeight": "100vh"},
+            style={"transition": "opacity 200ms ease-in"},
             is_in=False,
-        )
+        ),
     ]

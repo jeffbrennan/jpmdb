@@ -11,6 +11,7 @@ def get_imdb_datasets():
     out_dir.mkdir(parents=True, exist_ok=True)
     datasets = ["title.basics.tsv.gz", "title.ratings.tsv.gz"]
     for dataset in datasets:
+        print("parsing", dataset, "...")
         url = base_url + dataset
         response = requests.get(url)
         out_path = out_dir / dataset
