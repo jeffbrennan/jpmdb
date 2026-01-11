@@ -168,17 +168,25 @@ def style_timeseries_fig(
     return fig
 
 
+@lru_cache(maxsize=1)
+def _compute_trendline():
+    df = _get_records_cached()
+    watched_id_list = df["id"].to_list()
+    smoothed = lowess(df["juan"], range(len(watched_id_list)), frac=0.025)
+    x_trend = tuple(watched_id_list[i] for i, _ in enumerate(smoothed[:, 0]))
+    y_trend = tuple(smoothed[:, 1])
+    years = sorted(set(i.split("_")[0] for i in watched_id_list))
+    return x_trend, y_trend, years, watched_id_list
+
+
 @timeit
 def add_timeseries_trendline(
     df: pd.DataFrame, fig: Figure, watched_id_list: list[str], font_color: str
 ):
-    years = sorted(set(i.split("_")[0] for i in watched_id_list))
+    x_trend, y_trend, years, _ = _compute_trendline()
     for year in years[1:]:
         boundary_id = watched_id_list.index(year + "_001")
         fig.add_vline(x=boundary_id, line_color=font_color, layer="below")
-    smoothed = lowess(df["juan"], range(len(watched_id_list)), frac=0.025)
-    x_trend = [watched_id_list[i] for i, _ in enumerate(smoothed[:, 0])]
-    y_trend = smoothed[:, 1]
 
     outer_line_width = 6
     inner_line_width = 3
@@ -220,7 +228,7 @@ def get_color_palette(groups: list, n_colors: int = 10):
     [
         Output("timeseries-viz", "figure"),
         Output("timeseries-viz", "style"),
-        Output("summary-fade", "is_in"),
+        Output("summary-fade-bottom", "is_in"),
     ],
     [
         Input("color-mode-switch", "value"),
@@ -237,6 +245,7 @@ def get_timeseries_viz(dark_mode: bool, screen_width: str):
     [
         Output("timeseries-viz-latest", "figure"),
         Output("timeseries-viz-latest", "style"),
+        Output("timeseries-latest-ready", "data"),
     ],
     [
         Input("color-mode-switch", "value"),
@@ -245,7 +254,8 @@ def get_timeseries_viz(dark_mode: bool, screen_width: str):
 )
 @timeit
 def get_timeseries_viz_latest(dark_mode: bool, screen_width: str):
-    return _timeseries_viz(dark_mode, screen_width, True)
+    fig, style = _timeseries_viz(dark_mode, screen_width, True)
+    return fig, style, True
 
 
 def _timeseries_viz(dark_mode: bool, screen_width: str, filter_latest_year: bool):
@@ -525,6 +535,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
     [
         Output("ratings-histogram", "figure"),
         Output("ratings-histogram", "style"),
+        Output("histogram-ready", "data"),
     ],
     [
         Input("color-mode-switch", "value"),
@@ -613,13 +624,26 @@ def get_ratings_histogram(dark_mode: bool, screen_width: str):
             line=dict(color=font_color, width=2),
         )
 
-    return fig, {"height": "85vh"}
+    return fig, {}, True
+
+
+@callback(
+    Output("summary-fade-top", "is_in"),
+    [
+        Input("table-ready", "data"),
+        Input("histogram-ready", "data"),
+        Input("timeseries-latest-ready", "data"),
+    ],
+)
+def trigger_top_fade(table_ready, histogram_ready, timeseries_latest_ready):
+    return table_ready and histogram_ready and timeseries_latest_ready
 
 
 @callback(
     [
         Output("summary-table", "children"),
         Output("summary-table", "style"),
+        Output("table-ready", "data"),
     ],
     [
         Input("color-mode-switch", "value"),
@@ -708,26 +732,28 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
         **summary_style,
     )
 
-    return tbl, {}
+    return tbl, {}, True
 
 
 def layout():
     return [
+        dcc.Store(id="table-ready", data=False),
+        dcc.Store(id="histogram-ready", data=False),
+        dcc.Store(id="timeseries-latest-ready", data=False),
         dbc.Fade(
-            id="summary-fade",
+            id="summary-fade-top",
             children=[
                 dbc.Row(
                     children=[
                         dbc.Col(
                             id="summary-table",
-                            style={"visibility": "hidden"},
                             width=7,
                         ),
                         dbc.Col(
                             dcc.Graph(
                                 id="ratings-histogram",
-                                style={"visibility": "hidden"},
                                 config={"displayModeBar": False},
+                                style={"height": "85vh"},
                             ),
                             width=5,
                         ),
@@ -735,26 +761,29 @@ def layout():
                 ),
                 dcc.Graph(
                     id="timeseries-viz-latest",
-                    style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
+            ],
+            style={"transition": "opacity 200ms ease-in"},
+            is_in=False,
+        ),
+        dbc.Fade(
+            id="summary-fade-bottom",
+            children=[
                 dcc.Graph(
                     id="timeseries-viz",
-                    style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
                 dcc.Graph(
                     id="rating-diff-viz",
-                    style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
                 dcc.Graph(
                     id="box-viz",
-                    style={"visibility": "hidden"},
                     config={"displayModeBar": False},
                 ),
             ],
-            style={"transition": "opacity 200ms ease-in", "minHeight": "100vh"},
+            style={"transition": "opacity 200ms ease-in"},
             is_in=False,
-        )
+        ),
     ]

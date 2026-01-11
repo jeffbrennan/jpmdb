@@ -3,6 +3,7 @@
     src: url("/assets/fonts/jetbrainsmonoregular.woff2") format("woff2");
     font-weight: 100 900;
     font-style: normal;
+    font-display: swap;
 }
 
 #jpmdb-page,
@@ -67,6 +68,17 @@ body,
 
 ._dash-loading {
     display: none !important;
+}
+
+/* Hide all summary content until fade is triggered */
+#summary-fade-top:not(.show) > *,
+#summary-fade-bottom:not(.show) > * {
+    visibility: hidden;
+}
+
+#summary-fade-top.show > *,
+#summary-fade-bottom.show > * {
+    visibility: visible;
 }
 
 /* date slider */
