@@ -657,6 +657,11 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
         get_records()
         .drop(columns=["watched_year", "genres", "title"])
         .rename(columns={"title_with_link": "title"})
+        .assign(
+            votes=lambda x: x["votes"].apply(
+                lambda val: f"{(val / 1000):.1f}K" if val < 1_000_000 else f"{(val / 1000 / 1000):.1f}M"
+            )
+        )
     )
 
     summary_style = get_dt_style(dark_mode)
