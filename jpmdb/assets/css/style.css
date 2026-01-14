@@ -678,3 +678,44 @@ td[data-dash-column="diff"] .dash-cell-value {
 .plotly-graph-div .ygrid line {
     stroke: red !important;
 }
+
+.summary-row {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.summary-table-container {
+    width: 100%;
+    margin-bottom: 1.5rem;
+}
+
+.summary-histogram-container {
+    width: 100%;
+    height: 85vh;
+}
+
+.summary-histogram-container .js-plotly-plot,
+.summary-histogram-container .plotly-graph-div {
+    height: 100% !important;
+}
+
+@media (min-width: 1200px) {
+    .summary-row {
+        flex-direction: row;
+        gap: 1rem;
+    }
+
+    .summary-table-container {
+        flex: 0 0 58%;
+        max-width: 58%;
+        margin-bottom: 0;
+        height: 85vh;
+    }
+
+    .summary-histogram-container {
+        flex: 0 0 40%;
+        max-width: 40%;
+        height: 85vh;
+    }
+}

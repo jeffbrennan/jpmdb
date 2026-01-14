@@ -155,10 +155,25 @@ def style_timeseries_fig(
             )
         ],
         legend_title_text="",
-        legend=dict(x=1.005, xanchor="left", itemsizing="constant"),
     )
 
-    if screen_width != ScreenWidth.xs:
+    if screen_width in [ScreenWidth.xs, ScreenWidth.sm]:
+        fig.update_layout(
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="left",
+                x=0,
+                itemsizing="constant",
+            ),
+        )
+    else:
+        fig.update_layout(
+            legend=dict(x=1.005, xanchor="left", itemsizing="constant"),
+        )
+
+    if screen_width not in [ScreenWidth.xs, ScreenWidth.sm]:
         fig.update_layout(
             margin=dict(l=70, r=50, t=50, b=0),
         )
@@ -262,9 +277,14 @@ def get_timeseries_viz_latest(dark_mode: bool, screen_width: str):
 
 def _timeseries_viz(dark_mode: bool, screen_width: str, filter_latest_year: bool):
     df = get_records()
+    is_mobile = screen_width in [ScreenWidth.xs, ScreenWidth.sm]
+
     if filter_latest_year:
         latest_year = datetime.datetime.now().year - 1
         df = df.query(f"watched_year >= {latest_year}")
+    elif is_mobile:
+        cutoff_year = datetime.datetime.now().year - 3
+        df = df.query(f"watched_year >= {cutoff_year}")
 
     df["watched_year"] = df["watched_year"].astype(str)
     df["title_hover"] = df["id"] + " - " + df["title"]
@@ -300,7 +320,7 @@ def _timeseries_viz(dark_mode: bool, screen_width: str, filter_latest_year: bool
     fig = style_timeseries_fig(
         fig, watched_id_list, font_color, screen_width, point_size
     )
-    if not filter_latest_year:
+    if not filter_latest_year and not is_mobile:
         fig = add_timeseries_trendline(df, fig, watched_id_list, font_color)
 
     return fig, {}
@@ -392,15 +412,23 @@ def get_rating_diff_viz(dark_mode: bool, screen_width: str):
             )
         ],
         legend_title_text="rating compared to imdb",
-        legend=dict(x=1.005, xanchor="left"),
     )
-    if screen_width != ScreenWidth.xs:
+    if screen_width in [ScreenWidth.xs, ScreenWidth.sm]:
         fig.update_layout(
-            margin=dict(l=70, r=50, t=50, b=0),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="left",
+                x=0,
+                title_text="",
+            ),
+            margin=dict(l=0, r=0, t=0, b=0),
         )
     else:
         fig.update_layout(
-            margin=dict(l=0, r=0, t=0, b=0),
+            legend=dict(x=1.005, xanchor="left"),
+            margin=dict(l=70, r=50, t=50, b=0),
         )
 
     return fig, {}
@@ -452,6 +480,18 @@ def _get_genre_df_cached():
 @timeit
 def get_box_genres(dark_mode: bool, screen_width: str):
     df = get_genre_df()
+    is_mobile = screen_width in [ScreenWidth.xs, ScreenWidth.sm]
+
+    if is_mobile:
+        top_genres = (
+            df.groupby("genre")["n_titles"]
+            .first()
+            .sort_values(ascending=False)
+            .head(5)
+            .index.tolist()
+        )
+        df = df[df["genre"].isin(top_genres)]
+
     df["title_hover"] = df["id"] + " - " + df["title"]
     bg_color, font_color = get_site_colors(dark_mode, contrast=False)
     genres = df["genre"].unique()
@@ -460,7 +500,7 @@ def get_box_genres(dark_mode: bool, screen_width: str):
     repeats = (n_genres // n_colors) + 1
 
     colors = list(
-        pypalettes.load_cmap("Tableau_10", cmap_type="discrete", repeat=repeats).rgb  # type: ignore
+        pypalettes.load_cmap("Tableau_10", cmap_type="discrete", repeat=repeats).rgb
     )[0:n_genres]
 
     colors = [f"rgb({c[0]}, {c[1]}, {c[2]})" for c in colors]
@@ -475,9 +515,11 @@ def get_box_genres(dark_mode: bool, screen_width: str):
         template="plotly_dark" if dark_mode else "plotly_white",
         color_discrete_map={genre: color for genre, color in zip(genres, colors)},
     )
+
+    boxpoints_mode = "outliers" if is_mobile else "all"
     fig.update_traces(
         marker=dict(size=5, opacity=0.5, line=dict(width=1, color=font_color)),
-        boxpoints="all",
+        boxpoints=boxpoints_mode,
         jitter=0.8,
         hoverinfo="skip",
         selector=dict(type="box"),
@@ -519,15 +561,16 @@ def get_box_genres(dark_mode: bool, screen_width: str):
             )
         ],
         legend_title_text="",
-        legend=dict(x=1.005, xanchor="left"),
     )
-    if screen_width != ScreenWidth.xs:
+    if is_mobile:
         fig.update_layout(
-            margin=dict(l=70, r=50, t=50, b=0),
+            showlegend=False,
+            margin=dict(l=0, r=0, t=0, b=0),
         )
     else:
         fig.update_layout(
-            margin=dict(l=0, r=0, t=0, b=0),
+            legend=dict(x=1.005, xanchor="left"),
+            margin=dict(l=70, r=50, t=50, b=0),
         )
 
     return fig, {}
@@ -664,16 +707,27 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
         )
     )
 
+    is_mobile = breakpoint_name in [ScreenWidth.xs, ScreenWidth.sm]
+    is_ultrawide = breakpoint_name == ScreenWidth.xl
+
+    if is_mobile:
+        mobile_cols = ["id", "title", "juan", "imdb", "diff"]
+        df = df[mobile_cols]
+        display_cols = ["title", "juan", "imdb", "diff"]
+    elif is_ultrawide:
+        display_cols = None
+    else:
+        display_cols = ["title", "type", "year", "juan", "imdb", "diff", "votes"]
+
     summary_style = get_dt_style(dark_mode)
     summary_style["style_table"]["height"] = "85vh"
-    sm_margins, lg_margins = get_fig_margins("table")
 
-    if breakpoint_name in [ScreenWidth.xs, ScreenWidth.sm]:
+    if is_mobile:
         summary_style["style_cell"]["font_size"] = "12px"
+        sm_margins, _ = get_fig_margins("table")
         summary_style["style_table"].update(sm_margins)
-
     else:
-        summary_style["style_table"].update(lg_margins)
+        summary_style["style_table"].update({"width": "100%", "maxWidth": "100%"})
 
     tbl_cols = []
     markdown_style = {"presentation": "markdown"}
@@ -688,16 +742,24 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
         "votes": int_style,
     }
 
-    width_mapping = {
-        "id": 75,
-        "title": 200,
-        "type": 65,
-        "year": 65,
-        "rating": 65,
-        "imdb rating": 65,
-        "diff": 65,
-        "votes": 65,
-    }
+    if is_mobile:
+        width_mapping = {
+            "title": 130,
+            "juan": 70,
+            "imdb": 70,
+            "diff": 70,
+        }
+    else:
+        width_mapping = {
+            "id": 65,
+            "title": 170,
+            "type": 55,
+            "year": 55,
+            "juan": 55,
+            "imdb": 55,
+            "diff": 55,
+            "votes": 55,
+        }
 
     width_adjustment = [
         {
@@ -727,10 +789,10 @@ def get_styled_summary_table(dark_mode: bool, breakpoint_name: str):
         },
     ]
 
-    # Color scale for rating column (salmon low, blue high)
     summary_style["style_data_conditional"].extend(rating_diff_styles)
 
-    for col in df.columns:
+    cols_to_show = display_cols if display_cols else df.columns
+    for col in cols_to_show:
         if col in col_mapping:
             tbl_cols.append({**col_mapping[col], "id": col, "name": col})
         else:
@@ -754,25 +816,27 @@ def layout():
         dbc.Fade(
             id="summary-fade-top",
             children=[
-                dbc.Row(
+                html.Div(
                     children=[
-                        dbc.Col(
+                        html.Div(
                             id="summary-table",
-                            width=7,
+                            className="summary-table-container",
                         ),
-                        dbc.Col(
+                        html.Div(
                             dcc.Graph(
                                 id="ratings-histogram",
                                 config={"displayModeBar": False},
-                                style={"height": "85vh"},
+                                style={"height": "85vh", "width": "100%"},
                             ),
-                            width=5,
+                            className="summary-histogram-container",
                         ),
                     ],
+                    className="summary-row mb-5 mb-xl-2",
                 ),
                 dcc.Graph(
                     id="timeseries-viz-latest",
                     config={"displayModeBar": False},
+                    className="mb-5 mb-xl-2",
                 ),
             ],
             style={"transition": "opacity 200ms ease-in"},
@@ -784,10 +848,12 @@ def layout():
                 dcc.Graph(
                     id="timeseries-viz",
                     config={"displayModeBar": False},
+                    className="mb-5 mb-xl-2",
                 ),
                 dcc.Graph(
                     id="rating-diff-viz",
                     config={"displayModeBar": False},
+                    className="mb-5 mb-xl-2",
                 ),
                 dcc.Graph(
                     id="box-viz",
